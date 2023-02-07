@@ -3,8 +3,8 @@
 # Author: nikhil153
 # Last update: 16 Feb 2022
 
-if [ "$#" -ne 20 ]; then
-  echo "Please provide DATASET_ROOT, HEUDICONV_IMG, TEMPLATEFLOW_DIR, SINGULAIRTY_RUN_CMD, PARTICIPANT_ID, SESSION_ID, \
+if [ "$#" -ne 24 ]; then
+  echo "Please provide DATASET_ROOT, OUTPUT_DIR, FMRIPREP_IMG, TEMPLATEFLOW_DIR, SINGULAIRTY_RUN_CMD, PARTICIPANT_ID, SESSION_ID, \
         BIDS_FILTER flag (typically to filter out sessions), ANAT_ONLY flag and TEST_RUN flag"
 
   echo "Sample cmd: ./run_fmriprep_anat_and_func.sh -d <dataset_root> -h <path_to_fmriprep_img> -r <singularity> \
@@ -12,10 +12,11 @@ if [ "$#" -ne 20 ]; then
   exit 1
 fi
 
-while getopts d:i:r:f:p:s:b:a:v:t: flag
+while getopts d:o:i:r:f:p:s:b:a:v:w,t: flag
 do
     case "${flag}" in
         d) DATASET_ROOT=${OPTARG};;
+        o) OUTPUT_DIR=${OPTARG};;
         i) SINGULARITY_IMG=${OPTARG};;
         r) RUN_CMD=${OPTARG};; 
         f) TEMPLATEFLOW_DIR=${OPTARG};;         
@@ -23,7 +24,8 @@ do
         s) SESSION_ID=${OPTARG};;
         b) BIDS_FILTER=${OPTARG};;
         a) ANAT_ONLY=${OPTARG};;
-        v) VERSION=${OPTARG};;
+        v) FP_VERSION=${OPTARG};;
+        w) FS_VERSION=${OPTARG};;
         t) TEST_RUN=${OPTARG};;
     esac
 done
@@ -35,32 +37,35 @@ SINGULARITY_PATH=$RUN_CMD
 # TEMPLATEFLOW
 TEMPLATEFLOW_HOST_HOME=$TEMPLATEFLOW_DIR
 
-# FS license.txt path
-LOCAL_FS_LICENSE=${DATASET_ROOT}/derivatives/fmriprep/license.txt
-
 if [ "$TEST_RUN" -eq 1 ]; then
     echo "Doing a test run..."
     BIDS_DIR="$DATASET_ROOT/test_data/bids/" #Relative to WD (local or singularity)
-    DERIV_DIR="$DATASET_ROOT/test_data/derivatives/fmriprep/$VERSION/"
+    DERIV_DIR="$DATASET_ROOT/test_data/derivatives/"    
 else
     echo "Doing a real run..."
     BIDS_DIR="$DATASET_ROOT/bids/" #Relative to WD (local or singularity)
-    DERIV_DIR="$DATASET_ROOT/derivatives/fmriprep/$VERSION/"
+    DERIV_DIR="$DATASET_ROOT/derivatives/"
 fi
 
-OUT_DIR=${DERIV_DIR}/output
+# output paths
+FMRIPREP_DIR="$DERIV_DIR/fmriprep/$FP_VERSION/"
+FS_DIR="$DERIV_DIR/freesurfer/$FS_VERSION/output/"
+# FS license.txt path
+LOCAL_FS_LICENSE="$DERIV_DIR/freesurfer/license.txt"
 
-LOG_FILE=${DERIV_DIR}_fmriprep.log
+OUT_DIR=${FMRIPREP_DIR}/output
+
+LOG_FILE=${FMRIPREP_DIR}_fmriprep.log
 echo "Starting fmriprep proc with container: ${SINGULARITY_IMG}"
 echo ""
-echo "Using working dir: ${DERIV_DIR} and subject ID: ${PARTICIPANT_ID}"
+echo "Using working dir: ${FMRIPREP_DIR} and subject ID: ${PARTICIPANT_ID}"
 
 # Create subject specific dirs
 FMRIPREP_HOME=${OUT_DIR}/fmriprep_home_${PARTICIPANT_ID}
 echo "Processing: ${PARTICIPANT_ID} with home dir: ${FMRIPREP_HOME}"
 mkdir -p ${FMRIPREP_HOME}
 
-LOCAL_FREESURFER_DIR="${OUT_DIR}/freesurfer/ses-${SESSION_ID}"
+LOCAL_FREESURFER_DIR="${FS_DIR}/ses-${SESSION_ID}"
 mkdir -p ${LOCAL_FREESURFER_DIR}
 
 # Prepare some writeable bind-mount points.
@@ -81,7 +86,7 @@ SINGULARITY_CMD="singularity run \
 -B ${FMRIPREP_HOME}:/home/fmriprep --home /home/fmriprep --cleanenv \
 -B ${OUT_DIR}:/output \
 -B ${TEMPLATEFLOW_HOST_HOME}:${SINGULARITYENV_TEMPLATEFLOW_HOME} \
--B ${DERIV_DIR}:/work \
+-B ${FMRIPREP_DIR}:/work \
 -B ${LOCAL_FREESURFER_DIR}:/fsdir \
  ${SINGULARITY_IMG}"
 
@@ -98,8 +103,10 @@ cmd="${SINGULARITY_CMD} /data_dir /output participant --participant-label $PARTI
     --fs-license-file /home/fmriprep/.freesurfer/license.txt \
     --return-all-components -v \
     --write-graph --notrack \
-    --use-syn-sdc --force-syn --ignore fieldmaps \
     --omp-nthreads 4 --nthreads 8 --mem_mb 4000"
+
+# Field map (TODO)
+# --use-syn-sdc --force-syn --ignore fieldmaps \
 
 # Append optional args
 if [ "$BIDS_FILTER" -eq 1 ]; then

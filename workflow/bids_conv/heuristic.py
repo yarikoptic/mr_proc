@@ -1,10 +1,9 @@
 import os
 # HeuDiConv heuristics
-# Test shutil 
 
 # Based on: https://github.com/nipy/heudiconv/blob/master/heudiconv/heuristics/example.py
 POPULATE_INTENDED_FOR_OPTS = {
-        'matching_parameters': ['ModalityAcquisitionLabel'],
+        'matching_parameters': ["Shims"], #['ImagingVolume'],
         'criterion': 'Closest'
 }
 
@@ -24,47 +23,39 @@ def infotodict(seqinfo):
 
     #---------anat-----------#
     T1w = create_key('sub-{subject}/{session}/anat/sub-{subject}_{session}_run-{item:01d}_T1w')
-    T1wTFE = create_key('sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-TFE_run-{item:01d}_T1w')
     
-    # Other T1w prefixed acq
-    T1wSPIR = create_key('sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-SPIR_run-{item:01d}_T1w')
-    T1wTFEGD  = create_key('sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-TFE_ce-GD_run-{item:01d}_T1w')
-    
-    T1wMPRCOR = create_key('sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-MPRCOR_run-{item:01d}_T1w')
-    T1wMPRTRANS = create_key('sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-MPRTRANS_run-{item:01d}_T1w')
-
     T2w = create_key('sub-{subject}/{session}/anat/sub-{subject}_{session}_run-{item:01d}_T2w')
+    TSE = create_key('sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-TSE_run-{item:01d}_T2w')
 
-    PDw = create_key('sub-{subject}/{session}/anat/sub-{subject}_{session}_run-{item:01d}_PDw')
-
-    FLAIR = create_key('sub-{subject}/{session}/anat/sub-{subject}_{session}_run-{item:01d}_FLAIR')
-    FLAIRCOR = create_key('sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-COR_run-{item:01d}_FLAIR')
-    FLAIRTRANS = create_key('sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-TRANS_run-{item:01d}_FLAIR')
+    #---------SWI-----------#
+    SWI = create_key('sub-{subject}/{session}/swi/sub-{subject}_{session}_run-{item:01d}_swi')
+    SWIMag = create_key('sub-{subject}/{session}/swi/sub-{subject}_{session}_run-{item:01d}_part-mag_swi')
+    SWIPhase = create_key('sub-{subject}/{session}/swi/sub-{subject}_{session}_run-{item:01d}_part-phase_swi')
 
     #---------dwi-----------#
     dkiFOR = create_key('sub-{subject}/{session}/dwi/sub-{subject}_{session}_acq-DKIFOR_run-{item:01d}_dwi')
     dkiREV = create_key('sub-{subject}/{session}/dwi/sub-{subject}_{session}_acq-DKIREV_run-{item:01d}_dwi')
     
     #---------fmap-----------#
-    fmapAX = create_key('sub-{subject}/{session}/fmap/sub-{subject}_{session}_acq-bold_run-{item:01d}_epi')
+    fmapMag = create_key('sub-{subject}/{session}/fmap/sub-{subject}_{session}_run-{item:01d}_magnitude')
+    fmapPhase = create_key('sub-{subject}/{session}/fmap/sub-{subject}_{session}_run-{item:01d}_phasediff')
 
     #---------perf-----------#
     asl = create_key('sub-{subject}/{session}/perf/sub-{subject}_{session}_run-{item:01d}_asl')
-    fmapM0 = create_key('sub-{subject}/{session}/perf/sub-{subject}_{session}_acq-SENSE_run-{item:01d}_m0scan')
 
     #---------func-----------#
     bold = create_key('sub-{subject}/{session}/func/sub-{subject}_{session}_task-rest_run-{item:01d}_bold')
-    boldMB = create_key('sub-{subject}/{session}/func/sub-{subject}_{session}_task-rest_acq-multiband_run-{item:01d}_bold')
-    boldMBSP = create_key('sub-{subject}/{session}/func/sub-{subject}_{session}_task-rest_acq-multibandSP_run-{item:01d}_bold')
 
 
     # info dict to be populated
     info = {
-            T1w: [], T1wTFE: [], T1wSPIR: [], T1wTFEGD: [], T1wMPRCOR: [], T1wMPRTRANS: [], 
-            T2w: [], FLAIR: [], FLAIRCOR: [], FLAIRTRANS: [], PDw: [], 
+            T1w: [], 
+            T2w: [], TSE: [], 
+            SWI:[], SWIMag:[], SWIPhase:[], 
             dkiFOR: [], dkiREV: [], 
-            bold: [], boldMB: [], boldMBSP: [],
-            fmapAX: [], fmapM0: [],
+            bold: [], 
+            fmapMag: [],
+            fmapPhase: [],
             asl: []
            }
     
@@ -74,32 +65,31 @@ def infotodict(seqinfo):
     ##########################################################################################################
 
     keys_protocols_dict = {
-        T1w: ['Sag_3D_MPRAGE'],
-        T1wTFE: ['sT1W_3D_TFE_MPRAGE'],
-        T1wSPIR: ["T1W_3D_SPIR"],
-        T1wTFEGD: ["sT1W_3D_TFE_32ch_GD"],
-        T1wMPRCOR: ["MPR COR"],
-        T1wMPRTRANS: ["MPR TRANS"],
+        T1w: ['MPRAGE GRAPPA2'],
 
-        T2w: ["3D_Brain_VIEW_T2","T2W_DRIVE"],
-        FLAIR: ["3D_Brain_VIEW_FLAIR_SHC"],
-        FLAIRCOR: ["V3D_Brain_VIEW_FLAIR_OCOR"],
-        FLAIRTRANS: ["V3D_Brain_VIEW_FLAIR_TRANS"],
-        PDw: ["PDW_TSE_Tra"],
+        T2w: ["t2_space_dark-fluid_sag_p2_ns-t2prep"],
+        TSE: ["t2_tse_tra_512"],
+       
+        "T2_SWI": ["t2_swi_tra_p2_2mm"],
 
-        dkiFOR: ['DKI_uniform_distribution_FOR'], 
-        dkiREV: ['DKI_uniform_distribution_rev'], 
+        asl: ["pcasl_3d_singleTI"],
 
-        asl: ["SOURCE - ASL SENSE_NEW"],
-        fmapM0: ["M0 meting SENSE"],
+        bold: ['MB_ep2d_bold_s8'],
 
-        "boldMB": ['MB2_sample fmri protocol','MB2_sample fmri fa 52'],
+        dkiFOR: ['Diffusion_Kurtosis_FW_S2_modifide'], 
+        dkiREV: ['Diffusion_Kurtosis_FW_S2_modifide_rev'], 
 
-        boldMBSP: ["MB2_fmri_0.3_SP"],
-
-        fmapAX: ['Axial field mapping'], 
+        "fmap": ["Field_Mapping"]
         
     }
+    # These protcols needs special naming based on image type (see below)
+    protocols_with_mag_and_phase = {
+                                    "fmap": [fmapMag, fmapPhase],
+                                    }
+
+    protocols_with_swi = {
+                        "T2_SWI": [SWI,SWIMag,SWIPhase]
+                        }
 
     ##########################################################################################################
 
@@ -110,13 +100,25 @@ def infotodict(seqinfo):
         for key,protocols in keys_protocols_dict.items():
             print(f"key: {key}, protocols: {protocols}")
             for ptcl in protocols:
-                if (ptcl in s.protocol_name):   
-                    if key == "boldMB":
-                        if (s.dim3 in [15399,15999,16000,16001,17600]) & (ptcl == "MB2_sample fmri protocol"):
-                            info[boldMB].append(s.series_id)
-                        elif (s.dim3 in [16000,17600,17601,17543,35200]) & (ptcl == "MB2_sample fmri fa 52"):
-                            info[boldMB].append(s.series_id)
-                    else:
+                if (ptcl in s.protocol_name):    
+                    if key in protocols_with_mag_and_phase.keys():
+                        if 'M' in s.image_type:
+                            new_key = protocols_with_mag_and_phase[key][0] # first entry is mag
+                        else:
+                            new_key = protocols_with_mag_and_phase[key][1] # second entry is phase
+
+                        info[new_key].append(s.series_id)
+                    elif key in protocols_with_swi.keys():
+                        if s.series_description == 't2_swi_tra_p2_2mm_SWI':
+                            new_key = protocols_with_swi[key][0] # first entry is swi
+                        elif s.series_description == 't2_swi_tra_p2_2mm_Mag':
+                            new_key = protocols_with_swi[key][1] # second entry is mag
+                        else:
+                            new_key = protocols_with_swi[key][2] # third entry is phase
+
+                        info[new_key].append(s.series_id)
+
+                    else:                   
                         info[key].append(s.series_id)
                 
     return info

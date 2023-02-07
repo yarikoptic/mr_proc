@@ -31,14 +31,17 @@ def search_dicoms(raw_dicom_dir):
 
     return unique_dcm, invalid_dicom_list
 
-def copy_dicoms(filelist, dicom_dir):
+def copy_dicoms(filelist, dicom_dir, symlink=False):
     """ Copy dicoms from a scanner dicom-dir-tree output into a flat participant-level dir
     """
     if not Path(dicom_dir).is_dir():
         os.mkdir(dicom_dir)
         for f in filelist:
             f_basename = os.path.basename(f)
-            shutil.copyfile(f, f"{dicom_dir}{f_basename}")
+            if symlink:
+                os.symlink(f, f"{dicom_dir}{f_basename}")
+            else:
+                shutil.copyfile(f, f"{dicom_dir}{f_basename}")
     else:
         print(f"participant dicoms already exist")
 

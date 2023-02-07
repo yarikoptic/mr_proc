@@ -6,7 +6,7 @@ from pathlib import Path
 import shutil
 
 #Author: nikhil153
-#Date: 07-Oct-2022
+#Date: 05-Feb-2023 (last update)
 
 # argparse
 HELPTEXT = """
@@ -25,7 +25,7 @@ parser.add_argument('--test_run', action='store_true', help='do a test run or no
 
 args = parser.parse_args()
 
-global_config = args.global_config
+global_config_file = args.global_config
 participant_id = args.participant_id
 session_id = args.session_id
 output_dir = args.output_dir # Needed on BIC (QPN) due to weird permissions issues with mkdir
@@ -36,17 +36,21 @@ test_run = str(int(args.test_run))
 
   
 # Read global configs
-f = open(global_config)
-json_data = json.load(f)
+with open(global_config_file, 'r') as f:
+    global_configs = json.load(f)
 
-DATASET_ROOT = json_data["DATASET_ROOT"]
-SINGULARITY_PATH = json_data["SINGULARITY_PATH"]
-TEMPLATEFLOW_DIR = json_data["TEMPLATEFLOW_DIR"]
+DATASET_ROOT = global_configs["DATASET_ROOT"]
+DATASTORE_DIR = global_configs["DATASTORE_DIR"]
+TEMPLATEFLOW_DIR = global_configs["TEMPLATEFLOW_DIR"]
+SINGULARITY_PATH = global_configs["SINGULARITY_PATH"]
+CONTAINER_STORE = global_configs["CONTAINER_STORE"]
 
-FMRIPREP_VERSION = json_data["FMRIPREP_VERSION"]
+FMRIPREP_CONTAINER = global_configs["PROC_PIPELINES"]["fmriprep"]["CONTAINER"]
+FMRIPREP_VERSION = global_configs["PROC_PIPELINES"]["fmriprep"]["VERSION"]
+FS_VERSION = global_configs["PROC_PIPELINES"]["freesurfer"]["VERSION"]
+FMRIPREP_CONTAINER = FMRIPREP_CONTAINER.format(FMRIPREP_VERSION)
 
-SINGULARITY_FMRIPREP = json_data["SINGULARITY_FMRIPREP"]
-SINGULARITY_FMRIPREP = SINGULARITY_FMRIPREP.format(FMRIPREP_VERSION)
+SINGULARITY_FMRIPREP = f"{CONTAINER_STORE}{FMRIPREP_CONTAINER}"
 
 if output_dir is None:
     output_dir = DATASET_ROOT
@@ -56,7 +60,8 @@ print(f"Using output_dir: {output_dir}")
 print(f"Using SINGULARITY_FMRIPREP: {SINGULARITY_FMRIPREP}")
 
 # Create version specific output dir
-Path(f"{output_dir}/derivatives/fmriprep/v{FMRIPREP_VERSION}").mkdir(parents=True, exist_ok=True)
+Path(f"{output_dir}/derivatives/fmriprep/v{FMRIPREP_VERSION}/output").mkdir(parents=True, exist_ok=True)
+Path(f"{output_dir}/derivatives/freesurfer/v{FS_VERSION}/output").mkdir(parents=True, exist_ok=True)
 
 fname = __file__
 CWD = os.path.dirname(os.path.abspath(fname))
@@ -77,7 +82,7 @@ if use_bids_filter:
 FMRIPREP_SCRIPT = f"{CWD}/scripts/run_fmriprep.sh"
 FMRIPREP_ARGS = ["-d", DATASET_ROOT, "-o", output_dir, "-i", SINGULARITY_FMRIPREP, "-r", SINGULARITY_PATH, \
                  "-f", TEMPLATEFLOW_DIR, "-p", participant_id, "-s", session_id, "-b", bids_filter, \
-                 "-a", anat_only, "-v", f"v{FMRIPREP_VERSION}", "-t", test_run]
+                 "-a", anat_only, "-v", f"v{FMRIPREP_VERSION}", "-w", f"v{FS_VERSION}", "-t", test_run]
 FMRIPREP_CMD = [FMRIPREP_SCRIPT] + FMRIPREP_ARGS
 
 fmriprep_proc = subprocess.run(FMRIPREP_CMD)
