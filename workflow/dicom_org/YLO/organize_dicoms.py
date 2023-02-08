@@ -19,9 +19,14 @@ def reorg(participant):
     participant_raw_dicom_dir = f"{raw_dicom_dir}{participant}/"
     raw_dcm_list, invalid_dicom_list = search_dicoms(participant_raw_dicom_dir)
     print(f"n_raw_dicom: {len(raw_dcm_list)}, n_skipped (invalid/derived): {len(invalid_dicom_list)}")
-    participant_dicom_dir = f"{dicom_dir}{participant}/"
+
+    # Remove non-alphanumeric chars (e.g. "_" from the participant_dir names)
+    bids_participant = ''.join(filter(str.isalnum, participant))
+    participant_dicom_dir = f"{dicom_dir}{bids_participant}/"
+    
     copy_dicoms(raw_dcm_list, participant_dicom_dir, use_symlinks)
     
+    # Log skipped invalid dicom list for the participant
     invalid_dicoms_file = f"{log_dir}{participant}_invalid_dicoms.json"
     invalid_dicom_dict = {participant: invalid_dicom_list}
     # Save skipped or invalid dicom file list
@@ -49,7 +54,7 @@ n_jobs = args.n_jobs
 DATASET_ROOT = global_configs["DATASET_ROOT"]
 raw_dicom_dir = f"{DATASET_ROOT}scratch/raw_dicom/"
 dicom_dir = f"{DATASET_ROOT}dicom/"
-log_dir = f"{raw_dicom_dir}/logs/"
+log_dir = f"{DATASET_ROOT}scratch/logs/"
 mr_proc_manifest = f"{DATASET_ROOT}/tabular/demographics/mr_proc_manifest.csv"
 
 use_symlinks = True # Saves space and time! 

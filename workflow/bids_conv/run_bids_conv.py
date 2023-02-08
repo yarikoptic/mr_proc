@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 import os
 from joblib import Parallel, delayed
+import glob
 
 #Author: nikhil153
 #Date: 07-Oct-2022
@@ -75,21 +76,32 @@ manifest_df = pd.read_csv(mr_proc_manifest)
 participants = manifest_df["participant_id"].str.strip().values
 n_participants = len(participants)
 
+# generate bids_id
+manifest_df["dicom_id"] = [''.join(filter(str.isalnum, idx)) for idx in participants]
+manifest_df["bids_id"] = "sub-" + manifest_df["dicom_id"].astype(str)
+dicom_ids = list(manifest_df["dicom_id"])
+bids_ids = list(manifest_df["bids_id"])
+
 # available participant dicom dirs
 participant_dicom_dirs = next(os.walk(dicom_dir))[1]
-n_participant_dicom_dirs = len(set(participants) & set(participant_dicom_dirs))
+participant_dicom_dirs = set(dicom_ids) & set(participant_dicom_dirs)
+n_participant_dicom_dirs = len(participant_dicom_dirs)
 
 # available participant bids dirs
 participant_bids_dirs = next(os.walk(bids_dir))[1]
-n_participant_bids_dirs = len(set(participants) & set(participant_bids_dirs))
+participant_bids_dirs = set(bids_ids) & set(participant_bids_dirs)
+n_participant_bids_dirs = len(participant_bids_dirs)
 
 # check mismatch between manifest and participant dicoms
-missing_dicom_dirs = set(participants) - set(participant_dicom_dirs)
+missing_dicom_dirs = set(dicom_ids) - set(participant_dicom_dirs)
 n_missing_dicom_dirs = len(missing_dicom_dirs)
 
+participant_bids_dirs_dicom_ids = manifest_df[manifest_df["bids_id"].isin(participant_bids_dirs)]["dicom_id"]
+
 # participants to process with Heudiconv
-heudiconv_participants = set(participants) - set(participant_bids_dirs) - missing_dicom_dirs
+heudiconv_participants = set(dicom_ids) - set(missing_dicom_dirs) - set(participant_bids_dirs_dicom_ids)
 n_heudiconv_participants = len(heudiconv_participants)
+
 print("--------------------------------------------------------------------------")
 print("Identifying participants to be BIDSified\n"
 f" n_particitpants: {n_participants}\n \
@@ -99,10 +111,23 @@ n_missing_dicom_dirs: {n_missing_dicom_dirs}\n \
 heudiconv participants to processes: {n_heudiconv_participants}")
 print("--------------------------------------------------------------------------")
 
-# Copy heuristic.py into "DATASET_ROOT/proc/heuristic.py"
-if stage == 2:
-    print(f"Copying ./heuristic.py to {DATASET_ROOT}/proc/heuristic.py (to be seen by Singularity container)")
-    shutil.copyfile("heuristic.py", f"{DATASET_ROOT}/proc/heuristic.py")
+if n_heudiconv_participants > 0:
+    # Copy heuristic.py into "DATASET_ROOT/proc/heuristic.py"
+    if stage == 2:
+        print(f"Copying ./heuristic.py to {DATASET_ROOT}/proc/heuristic.py (to be seen by Singularity container)")
+        shutil.copyfile("heuristic.py", f"{DATASET_ROOT}/proc/heuristic.py")
 
-## Process in parallel! 
-Parallel(n_jobs=n_jobs)(delayed(run_heudiconv)(participant_id) for participant_id in heudiconv_participants)
+    ## Process in parallel! 
+    Parallel(n_jobs=n_jobs)(delayed(run_heudiconv)(participant_id) for participant_id in heudiconv_participants)
+
+    # Check succussful bids
+    participant_bids_paths = glob.glob(f"{bids_dir}/sub-*")
+    manifest_df.to_csv(mr_proc_manifest,index=None)
+    print("--------------------------------------------------------------------------")
+    print(f"BIDS conversion completed for the new {n_heudiconv_participants} participants")
+    print(f"Current successfully converted BIDS participants: {len(participant_bids_paths)}")
+    
+else:
+    print(f"No new participants found for bids conversion...")
+
+print("--------------------------------------------------------------------------\n")
