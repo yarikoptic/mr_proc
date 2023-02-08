@@ -13,7 +13,6 @@ from joblib import Parallel, delayed
 
 def run_heudiconv(participant_id):
     print(f"\n***Processing participant: {participant_id}***")
-    participant_subdir_path = f"{DATASET_ROOT}/dicom/{participant_id}"
 
     # Run HeuDiConv script
     HEUDICONV_SCRIPT = f"scripts/heudiconv_stage_{stage}.sh"
@@ -105,4 +104,5 @@ if stage == 2:
     print(f"Copying ./heuristic.py to {DATASET_ROOT}/proc/heuristic.py (to be seen by Singularity container)")
     shutil.copyfile("heuristic.py", f"{DATASET_ROOT}/proc/heuristic.py")
 
+## Process in parallel! 
 Parallel(n_jobs=n_jobs)(delayed(run_heudiconv)(participant_id) for participant_id in heudiconv_participants)

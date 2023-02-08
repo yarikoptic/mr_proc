@@ -54,6 +54,11 @@ mr_proc_manifest = f"{DATASET_ROOT}/tabular/demographics/mr_proc_manifest.csv"
 
 use_symlinks = True # Saves space and time! 
 
+print("--------------------------------------------------------------------------")
+print(f"Using DATASET_ROOT: {DATASET_ROOT}")
+print(f"symlinks: {use_symlinks}")
+print(f"Number of parallel jobs: {n_jobs}")
+
 # read current participant manifest 
 manifest_df = pd.read_csv(mr_proc_manifest)
 participants = manifest_df["participant_id"].str.strip().values
@@ -86,6 +91,9 @@ dicom_reorg_participants: {n_dicom_reorg_participants}")
 # start reorganizing
 if n_dicom_reorg_participants > 0:
     
+    Path(f"{log_dir}").mkdir(parents=True, exist_ok=True)
+
+    ## Process in parallel! 
     print(f"\nStarting dicom reorg for {n_dicom_reorg_participants} participant(s)")
     Parallel(n_jobs=n_jobs)(delayed(reorg)(participant_id) for participant_id in dicom_reorg_participants)
 
