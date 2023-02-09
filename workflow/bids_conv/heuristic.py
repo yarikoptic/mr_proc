@@ -3,7 +3,7 @@ import os
 
 # Based on: https://github.com/nipy/heudiconv/blob/master/heudiconv/heuristics/example.py
 POPULATE_INTENDED_FOR_OPTS = {
-        'matching_parameters': ["Shims"], #['ImagingVolume'],
+        'matching_parameters': ["ModalityAcquisitionLabel"], #['ImagingVolume'],
         'criterion': 'Closest'
 }
 
@@ -37,8 +37,8 @@ def infotodict(seqinfo):
     dkiREV = create_key('sub-{subject}/{session}/dwi/sub-{subject}_{session}_acq-DKIREV_run-{item:01d}_dwi')
     
     #---------fmap-----------#
-    fmapMag = create_key('sub-{subject}/{session}/fmap/sub-{subject}_{session}_run-{item:01d}_magnitude')
-    fmapPhase = create_key('sub-{subject}/{session}/fmap/sub-{subject}_{session}_run-{item:01d}_phasediff')
+    fmapMag = create_key('sub-{subject}/{session}/fmap/sub-{subject}_{session}_acq-bold_run-{item:01d}_magnitude')
+    fmapPhase = create_key('sub-{subject}/{session}/fmap/sub-{subject}_{session}_acq-bold_run-{item:01d}_phasediff')
 
     #---------perf-----------#
     asl = create_key('sub-{subject}/{session}/perf/sub-{subject}_{session}_run-{item:01d}_asl')

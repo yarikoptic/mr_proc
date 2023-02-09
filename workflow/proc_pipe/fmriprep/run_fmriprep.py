@@ -32,7 +32,7 @@ output_dir = args.output_dir # Needed on BIC (QPN) due to weird permissions issu
 use_bids_filter = args.use_bids_filter
 bids_filter = str(int(use_bids_filter)) #reformat for shell script argument
 anat_only = str(int(args.anat_only))
-test_run = str(int(args.test_run))
+test_run = args.test_run
 
   
 # Read global configs
@@ -59,30 +59,37 @@ print(f"Using DATASET_ROOT: {DATASET_ROOT}")
 print(f"Using output_dir: {output_dir}")
 print(f"Using SINGULARITY_FMRIPREP: {SINGULARITY_FMRIPREP}")
 
-# Create version specific output dir
-Path(f"{output_dir}/derivatives/fmriprep/v{FMRIPREP_VERSION}/output").mkdir(parents=True, exist_ok=True)
-Path(f"{output_dir}/derivatives/freesurfer/v{FS_VERSION}/output").mkdir(parents=True, exist_ok=True)
+# Specify paths
+if test_run:
+    print("Doing a test run")
+    bids_dir = f"{DATASET_ROOT}/test_data/bids/"
+    derivs_dir = f"{output_dir}/test_data/derivatives/"
+else:
+    bids_dir = f"{DATASET_ROOT}/bids/"
+    derivs_dir = f"{output_dir}/derivatives/"
+
+fmriprep_dir = f"{output_dir}/derivatives/fmriprep/v{FMRIPREP_VERSION}"
+# freesurfer won't
+FS_dir = f"{output_dir}/derivatives/freesurfer/v{FS_VERSION}/output/ses-{session_id}"
+FS_license = f"{output_dir}/derivatives/freesurfer/license.txt"
+
+Path(f"{fmriprep_dir}/output").mkdir(parents=True, exist_ok=True)
+Path(FS_dir).mkdir(parents=True, exist_ok=True)
 
 fname = __file__
 CWD = os.path.dirname(os.path.abspath(fname))
-print(f"CWD: {CWD}, fname: {fname}")
+# print(f"CWD: {CWD}, fname: {fname}")
 
-#Copy bids_filter.json `<DATASET_ROOT>/bids/bids_filter.json`
+# Copy bids_filter.json `<DATASET_ROOT>/bids/bids_filter.json`
 if use_bids_filter:
     print(f"Copying ./bids_filter.json to {DATASET_ROOT}/bids/bids_filter.json (to be seen by Singularity container)")
-    if test_run == "1":
-        shutil.copyfile(f"{CWD}/bids_filter.json", f"{DATASET_ROOT}/test_data/bids/bids_filter.json")
-    else:
-        shutil.copyfile(f"{CWD}/bids_filter.json", f"{DATASET_ROOT}/bids/bids_filter.json")
+    shutil.copyfile(f"{CWD}/bids_filter.json", f"{bids_dir}/bids_filter.json")
 
-# Run FMRIPREP script
-# "Sample cmd: ./run_fmriprep_anat_and_func.sh -d <dataset_root> -i <path_to_fmriprep_img> -r <singularity> \
-#         -f <path_to_templateflow_dir> -p <MNI01> -s <01> -b 1 -a 1 -t 1"
-
+# setup singularity run script command
 FMRIPREP_SCRIPT = f"{CWD}/scripts/run_fmriprep.sh"
-FMRIPREP_ARGS = ["-d", DATASET_ROOT, "-o", output_dir, "-i", SINGULARITY_FMRIPREP, "-r", SINGULARITY_PATH, \
-                 "-f", TEMPLATEFLOW_DIR, "-p", participant_id, "-s", session_id, "-b", bids_filter, \
-                 "-a", anat_only, "-v", f"v{FMRIPREP_VERSION}", "-w", f"v{FS_VERSION}", "-t", test_run]
+FMRIPREP_ARGS = ["-d", bids_dir, "-o", fmriprep_dir, "-f", FS_dir, "-l", FS_license, "-p", participant_id, \
+                 "-c", SINGULARITY_FMRIPREP, "-r", SINGULARITY_PATH, "-t", TEMPLATEFLOW_DIR, \
+                 "-b", bids_filter, "-a", anat_only]
 FMRIPREP_CMD = [FMRIPREP_SCRIPT] + FMRIPREP_ARGS
 
 fmriprep_proc = subprocess.run(FMRIPREP_CMD)

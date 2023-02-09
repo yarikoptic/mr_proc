@@ -3,70 +3,54 @@
 # Author: nikhil153
 # Last update: 16 Feb 2022
 
-if [ "$#" -ne 24 ]; then
-  echo "Please provide DATASET_ROOT, OUTPUT_DIR, FMRIPREP_IMG, TEMPLATEFLOW_DIR, SINGULAIRTY_RUN_CMD, PARTICIPANT_ID, SESSION_ID, \
-        BIDS_FILTER flag (typically to filter out sessions), ANAT_ONLY flag and TEST_RUN flag"
-
-  echo "Sample cmd: ./run_fmriprep_anat_and_func.sh -d <dataset_root> -h <path_to_fmriprep_img> -r <singularity> \
-        -f <path_to_templateflow_dir> -p <MNI01> -s <01> -b 1 -a 1 -t 1"
+if [ "$#" -ne 20 ]; then
+  echo "Please provide DATA_DIR, FMRIPREP_DIR, FMRIPREP_IMG, FS_DIR, FS_LICENSE, PARTICIPANT_ID, \
+        CONTAINER, TEMPLATEFLOW_DIR, SINGULAIRTY_RUN_CMD, \
+        BIDS_FILTER flag (typically to filter out sessions), ANAT_ONLY flag"
   exit 1
 fi
 
-while getopts d:o:i:r:f:p:s:b:a:v:w,t: flag
+while getopts d:o:f:l:p:c:r:t:b:a: flag
 do
     case "${flag}" in
-        d) DATASET_ROOT=${OPTARG};;
-        o) OUTPUT_DIR=${OPTARG};;
-        i) SINGULARITY_IMG=${OPTARG};;
-        r) RUN_CMD=${OPTARG};; 
-        f) TEMPLATEFLOW_DIR=${OPTARG};;         
+        d) DATA_DIR=${OPTARG};;
+        o) FMRIPREP_DIR=${OPTARG};;
+        f) FS_DIR=${OPTARG};;
+        l) FS_LICENSE=${OPTARG};;
         p) PARTICIPANT_ID=${OPTARG};;
-        s) SESSION_ID=${OPTARG};;
+        c) CONTAINER=${OPTARG};;
+        r) RUN_CMD=${OPTARG};; 
+        t) TEMPLATEFLOW_DIR=${OPTARG};;                 
         b) BIDS_FILTER=${OPTARG};;
         a) ANAT_ONLY=${OPTARG};;
-        v) FP_VERSION=${OPTARG};;
-        w) FS_VERSION=${OPTARG};;
-        t) TEST_RUN=${OPTARG};;
     esac
 done
 
 # Container
-SINGULARITY_IMG=$SINGULARITY_IMG
+SINGULARITY_CONTAINER=$CONTAINER
 SINGULARITY_PATH=$RUN_CMD
 
 # TEMPLATEFLOW
 TEMPLATEFLOW_HOST_HOME=$TEMPLATEFLOW_DIR
 
-if [ "$TEST_RUN" -eq 1 ]; then
-    echo "Doing a test run..."
-    BIDS_DIR="$DATASET_ROOT/test_data/bids/" #Relative to WD (local or singularity)
-    DERIV_DIR="$DATASET_ROOT/test_data/derivatives/"    
-else
-    echo "Doing a real run..."
-    BIDS_DIR="$DATASET_ROOT/bids/" #Relative to WD (local or singularity)
-    DERIV_DIR="$DATASET_ROOT/derivatives/"
-fi
-
-# output paths
-FMRIPREP_DIR="$DERIV_DIR/fmriprep/$FP_VERSION/"
-FS_DIR="$DERIV_DIR/freesurfer/$FS_VERSION/output/"
+# paths
+BIDS_DIR=$DATA_DIR
+FMRIPREP_DIR=$FMRIPREP_DIR
+FS_DIR=$FS_DIR
 # FS license.txt path
-LOCAL_FS_LICENSE="$DERIV_DIR/freesurfer/license.txt"
+LOCAL_FS_LICENSE=$FS_LICENSE
 
-OUT_DIR=${FMRIPREP_DIR}/output
+FP_OUT_DIR=${FMRIPREP_DIR}/output
 
 LOG_FILE=${FMRIPREP_DIR}_fmriprep.log
-echo "Starting fmriprep proc with container: ${SINGULARITY_IMG}"
+echo "Starting fmriprep proc with container: ${SINGULARITY_CONTAINER}"
 echo ""
 echo "Using working dir: ${FMRIPREP_DIR} and subject ID: ${PARTICIPANT_ID}"
 
 # Create subject specific dirs
-FMRIPREP_HOME=${OUT_DIR}/fmriprep_home_${PARTICIPANT_ID}
+FMRIPREP_HOME=${FP_OUT_DIR}/fmriprep_home_${PARTICIPANT_ID}
 echo "Processing: ${PARTICIPANT_ID} with home dir: ${FMRIPREP_HOME}"
 mkdir -p ${FMRIPREP_HOME}
-
-LOCAL_FREESURFER_DIR="${FS_DIR}/ses-${SESSION_ID}"
-mkdir -p ${LOCAL_FREESURFER_DIR}
 
 # Prepare some writeable bind-mount points.
 FMRIPREP_HOST_CACHE=$FMRIPREP_HOME/.cache/fmriprep
@@ -84,14 +68,14 @@ export SINGULARITYENV_TEMPLATEFLOW_HOME="/templateflow"
 SINGULARITY_CMD="singularity run \
 -B ${BIDS_DIR}:/data_dir \
 -B ${FMRIPREP_HOME}:/home/fmriprep --home /home/fmriprep --cleanenv \
--B ${OUT_DIR}:/output \
+-B ${FP_OUT_DIR}:/output \
 -B ${TEMPLATEFLOW_HOST_HOME}:${SINGULARITYENV_TEMPLATEFLOW_HOME} \
 -B ${FMRIPREP_DIR}:/work \
--B ${LOCAL_FREESURFER_DIR}:/fsdir \
- ${SINGULARITY_IMG}"
+-B ${FS_DIR}:/fsdir \
+ ${SINGULARITY_CONTAINER}"
 
 # Remove IsRunning files from FreeSurfer
-# find ${LOCAL_FREESURFER_DIR}/sub-$PARTICIPANT_ID/ -name "*IsRunning*" -type f -delete
+# find ${FS_DIR}/sub-$PARTICIPANT_ID/ -name "*IsRunning*" -type f -delete
 
 # Compose fMRIPrep command
 cmd="${SINGULARITY_CMD} /data_dir /output participant --participant-label $PARTICIPANT_ID \
