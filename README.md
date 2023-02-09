@@ -25,7 +25,7 @@ A workflow manager for curating MRI and tabular data and standarized processing.
    - Copy your participant-level dicom dirs (e.g. `MNI001`, `MNI002` ...) into `<study_name>/scratch/raw_dicom/`
    
 ### Periodic runs
-1. Update the `mr_proc_manifest.csv` in `<study_name>/tabular/demographics` comprising at least `participant_id`,`age`,`sex`,`group` (typically a diagnosis) columns.   
+1. Update the `mr_proc_manifest.csv` in `/home/<user>/projects/<my_project>/data/<study_name>/tabular/demographics` comprising at least `participant_id`,`age`,`sex`,`group` (typically a diagnosis) columns.   
 2. Change dir to `code`: `cd /home/<user>/projects/<my_project>/code/`
 2. Activate your env: `source mr_proc/bin/activate` (if starting with a new terminal)
 3. Change dir to mr_proc scripts: `cd /home/<user>/projects/<my_project>/code/mr_proc/scripts`

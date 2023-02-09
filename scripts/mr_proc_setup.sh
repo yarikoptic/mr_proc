@@ -36,7 +36,7 @@ else
     if [ ! -f $global_config ]; then
         echo ""
         echo "copying global config template"
-        cp ../workflow/sample_global_configs.json $global_config
+        cp ../sample_global_configs.json $global_config
     fi
     
     echo "Need to poulate mandatory global configs for pipeline processing: $global_config"
