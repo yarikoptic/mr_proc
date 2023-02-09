@@ -28,7 +28,20 @@ else
     mkdir -p $DATASET_ROOT/test_data/{dicom,bids,derivatives,tabular}
     mkdir -p $DATASET_ROOT/tabular/{demographics,assessments}
     mkdir -p $DATASET_ROOT/derivatives/{freesurfer,fmriprep,mriqc,tractoflow}
+    mkdir -p $DATASET_ROOT/scratch/raw_dicom
 
+    echo "--------------------------------------------------"
+    global_config=$DATASET_ROOT/proc/global_config.json
+
+    if [ ! -f $global_config ]; then
+        echo ""
+        echo "copying global config template"
+        cp ../workflow/sample_global_configs.json $global_config
+    fi
+    
+    echo "Need to poulate mandatory global configs for pipeline processing: $global_config"
+    echo "--------------------------------------------------"
+    echo "--------------------------------------------------"
     mr_proc_manifest=$DATASET_ROOT/tabular/demographics/mr_proc_manifest.csv    
     
     if [ ! -f $mr_proc_manifest ]; then
@@ -36,19 +49,8 @@ else
         echo "initializing mr_proc_manifest.csv"
         echo "participant_id,age,sex,group" > $mr_proc_manifest
     fi
-    echo "--------------------------------------------------"
+    
     echo "Need to poulate mandatory recruitment manifest: $mr_proc_manifest"
-    echo "--------------------------------------------------"
-
-    global_config=$DATASET_ROOT/proc/global_config.json
-
-    if [ ! -f $global_config ]; then
-        echo ""
-        echo "copying global config template"
-        cp ../workflow/global_configs.json $global_config
-    fi
-    echo "--------------------------------------------------"
-    echo "Need to poulate mandatory global configs for pipeline processing: $global_config"
     echo "--------------------------------------------------"
 
 fi
