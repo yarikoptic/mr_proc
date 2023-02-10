@@ -25,7 +25,7 @@ def infotodict(seqinfo):
     T1w = create_key('sub-{subject}/{session}/anat/sub-{subject}_{session}_run-{item:01d}_T1w')
     
     T2w = create_key('sub-{subject}/{session}/anat/sub-{subject}_{session}_run-{item:01d}_T2w')
-    TSE = create_key('sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-TSE_run-{item:01d}_T2w')
+    FLAIR = create_key('sub-{subject}/{session}/anat/sub-{subject}_{session}_run-{item:01d}_FLAIR')
 
     #---------SWI-----------#
     SWI = create_key('sub-{subject}/{session}/swi/sub-{subject}_{session}_run-{item:01d}_swi')
@@ -46,11 +46,10 @@ def infotodict(seqinfo):
     #---------func-----------#
     bold = create_key('sub-{subject}/{session}/func/sub-{subject}_{session}_task-rest_run-{item:01d}_bold')
 
-
     # info dict to be populated
     info = {
             T1w: [], 
-            T2w: [], TSE: [], 
+            T2w: [], FLAIR: [], 
             SWI:[], SWIMag:[], SWIPhase:[], 
             dkiFOR: [], dkiREV: [], 
             bold: [], 
@@ -66,9 +65,9 @@ def infotodict(seqinfo):
 
     keys_protocols_dict = {
         T1w: ['MPRAGE GRAPPA2'],
-
-        T2w: ["t2_space_dark-fluid_sag_p2_ns-t2prep"],
-        TSE: ["t2_tse_tra_512"],
+        
+        T2w: ["t2_tse_tra_512"],
+        FLAIR: ["t2_space_dark-fluid_sag_p2_ns-t2prep"],        
        
         "T2_SWI": ["t2_swi_tra_p2_2mm"],
 
