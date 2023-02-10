@@ -1,91 +1,150 @@
-# PPMI_processing
+# mr_proc 
+A workflow for standarized MR images processing. 
+*Process long and prosper.*
 
-Repository for PPMI image processing codebase. All the imaging data were downloaded from [PPMI](https://www.ppmi-info.org/), mainly supporting 2 projects:
+## Objective
+This repo will contain container recipes and run scripts to manage MR data organization and image processing. Currently, it offers scripts to: 
+    1. Standadized data i.e. convert DICOMs into BIDS.
+    2. Run commonly used image processing pipelines e.g. FreeSurfer, fMRIPrep.
+    3. Organize processed MR data inside `derivatives` directory. 
+    4. Organize demographic and clinical assessment data inside `tabular` directory. 
+    5. Provide metadata to `NeuroBagel` to allow indexing and query participants across multiple studies.
+    
+The scripts in mr_proc operate on a dataset directory with a specific subdir tree structure.
 
-1. PD subtypying and progression, the corresponding version is **ver-sdMRI**, this is the base version dataset;
-2. PD bio-marker reproducibility study, the corresponding version is  [**ver-livingpark**](https://github.com/LivingPark-MRI), all the data in this study but not in **ver-sdMRI** are placed here;
-3. All the other versions will be created upon the creations and approvals of new PD related projects.
+<img src="imgs/mr_proc_data_proc_org.jpg" alt="Drawing" align="middle" width="500px"/>
 
-## Meatadata
-Metadata regarding the dataset and different versions of this PPMI dataset (`metadata/*`). 
+The organization mr_proc code module is as follows:
+   - global_config: A file to set various paths specific to the machine you are using which will be used for data processing. 
+   - scripts: helper code to setup and check status of mr_proc
+   - workflow: code modules to exectute mr_proc stages and logging
+   - metadata: files to track mr_proc progress
 
-## Modalities and protocols
-PPMI is a multi-model multi-site imaging collection, we only focus on structrual MRI (T1) and dissuion MRI (DWI). Due to the multi-site nature of PPMI, the protocols used in this data set is complex, and we manage these protocols with a [heuristic file]([HeuDiConv/Heuristics_PPMI_all.py](https://github.com/neurodatascience/mr_proc/blob/fa21c6803a5b11d7da8c0124d11f9fdeac813e79/HeuDiConv/Heuristics_PPMI_all.py)) for our dicoms to bids conversion, refer to [PPMI docs](https://www.ppmi-info.org/study-design/research-documents-and-sops) for detailed acquisition parameters.
+## General Notes
+   - The mr_proc setup uses Singualrity containers to run various MR image processing pipelines. Once the container is created/downloaded, you can write a python or shell run script and save them inside [my_new_pipeline](/workflow/proc_pipe/)
+   - The mr_proc setup allows you to validate processed output for 1) BIDS conversion 2) FreeSurfer 3) fMRIPrep and reports failed participants.
 
-## Processing Steps
+## Workflow steps
 
-<img src="imgs/PPMI_workflow.jpg" alt="Drawing" align="middle" width="500px"/>
+### Installation
+   - Change dir to where you want to clone this repo, e.g.: `cd /home/<user>/projects/<my_project>/code/`
+   - Create a new [venv](https://realpython.com/python-virtual-environments-a-primer/): `python3 -m venv mr_proc_env` 
+   - Activate your env: `source mr_proc_env/bin/activate` 
+   - Clone this repo: `git clone https://github.com/neurodatascience/mr_proc.git`
+   - Change dir to `mr_proc` and checkout nimhans branch: `git checkout nimhans` 
+   - Install python dependencies: `pip install -e .`  
 
-**1. Datadownload and curation**
+### 0. Setup dataset directory structure
+   - mr_proc expects following directory tree with several *mandatory* subdirs and files. 
+   - You can run `scripts/mr_proc_setup.sh` to create this directory tree. 
+   - You can run `scripts/mr_proc_stutus.sh` check status of your dataset
 
-1.1. The dataset were downloaded from PPMI imaging collections, and located in ```/data/pd/ppmi/downloads``` on BIC server;
+<img src="imgs/mr_proc_data_dir_org.jpg" alt="Drawing" align="middle" width="1000px"/>
 
-1.2 The dataset includes: a) The imaging data (raw file, the dicom images); 2) The downloading meta data (tsv file, metadata for this download); 3) The imaging metadata (zip file of xml files, descripters for all images); 4) The study data (demographics data, clinical assessments, etc.).
+### 1. Create subject manifest
+   - Update the `mr_proc_manifest.csv` in `<DATASET_ROOT>/tabular/demographics` comprising at least `participant_id`,`age`,`sex`,`group` (typically a diagnosis) columns.  
+       - This list serves as a ground truth for subject availability and participant IDs are used to create BIDS ids downstream.
+       
+### 2. Gather MRI acquisition protocols (Optional)
+   - List all the modalities and acquisition protocols used duing scanning e.g. MPRAGE, 3DT1, FLAIR, RS-FMRI etc. in the `mr_proc/workflow/dicom_org/scan_protocols.csv`
+   - Although optional this is an important documentation for comparing across studies. 
+   
+### 3. Organize (and rename) DICOMs 
+   - Scanner DICOM files are named and stored in various formats and locations. In this step we extract, copy, and rename DICOMs in a single directory for all participants with available imaging data. 
+       - Copy / download all "raw dicoms" in the `<DATASET_ROOT>/scratch/raw_dicoms` directory.
+       - Write a script to extract, copy, and rename these raw DICOMs into `<dataset>/dicom`. Ensure `participant_id` naming matches with `participants.csv` in `<DATASET_ROOT>/tabular/demographics` 
+   - Copy a single participant (i.e. dicom dir) into `<DATASET_ROOT>/test_data/dicom`. This participant will serve as a test case for various pipelines. 
+   
+### 4. Populate [global configs](`<DATASET_ROOT>/proc/global_configs.json`) file
+   - This file contains paths to dataset, pipeline versions, and containers used by several workflow scripts.
+   - This is a dataset specific file and needs to be modified based on local configs and paths.
 
-**Issues**
+### 5. Run DICOM --> BIDS conversion using [Heudiconv](https://heudiconv.readthedocs.io/en/latest/) ([tutorial](https://neuroimaging-core-docs.readthedocs.io/en/latest/pages/heudiconv.html))
+   - Make sure you have the appropriate HeuDiConv container in your [global configs](./workflow/global_configs.json)
+   - Use [run_bids_conv.py](workflow/bids_conv/run_bids_conv.py) to run HeuDiConv `stage_1` and `stage_2`.  
+      - Run `stage_1` to generate a list of available protocols from the DICOM header. These protocols are listed in `<DATASET_ROOT>/bids/.heudiconv/<participant_id>/info/dicominfo_ses-<session_id>.tsv`
+      - Example command:
+         - python run_bids_conv.py --global_config ../global_configs.json --participant_id MNI01 --session_id 01 --stage 1
 
-We also have an automatic downloading piepline from livingPark project: [ppmi-scraper](https://github.com/LivingPark-MRI/ppmi-scraper) for automatic subject level download, but the downloading meta data is not avalible. 
+      - Copy+Rename [sample heuristic file](workflow/bids_conv/sample_heuristic.py) --> `./heuristic.py` to create a name-mapping (i.e. dictionary) for bids organization based on the list of available protocols. **Note that this file automatically gets copied into `$DATASET_ROOT/proc/heuristic.py` to be seen by the Singularity container.**
+      - Run `stage_2` to convert the dicoms into BIDS format based on the mapping from `heuristic.py`. 
+      - Example command:
+         - python run_bids_conv.py --global_config ../global_configs.json --participant_id MNI01 --session_id 01 --stage 2
 
-**2. BIDS conversion using [HeuDiConv](https://github.com/nipy/heudiconv) ver-0.9.0** (`workflow/HeuDiConv/*`)
+       - The above scripts are written to work on a single participant. The entire dataset can be BIDSified using a "for loop" or if you have access to a cluster you can run it parallel using queue submission [scripts](workflow/bids_conv/scripts/hpc/)
+       - If you are doing this for the first time, you should first try [run_bids_conv.py](workflow/bids_conv/run_bids_conv.py) in a `test mode` by following these steps:
+            - Copy a single participant directory from `<DATASET_ROOT>/dicom` to `<DATASET_ROOT>/test_data/dicom` 
+            - Run `stage_1` and `stage_2` with [run_bids_conv.py](workflow/bids_conv/run_bids_conv.py) with additional `--test_run` flag. 
 
-2.1 **Fix the potnetial studyID conflicts** in dicoms with [studyID_fixer](workflow/HeuDiConv/studyID_fixer.py);
+### 6. Run BIDS validator
+   - Make sure you have the appropriate HeuDiConv container in your [global configs](./workflow/global_configs.json)
+   - Use [run_bids_val.sh](workflow/bids_conv/scripts/run_bids_val.sh) to check for errors and warnings
+        - Sample command: `run_bids_val.sh <bids_dir> <log_dir>` 
+        - Alternatively if your machine has a browser you can also use an online [validator](https://bids-standard.github.io/bids-validator/)
+   - Note that Heudiconv is not perfect! Common issues:
+       - Make sure you match the version of Heudiconv and BIDS validator standard. 
+       - Heuristic file will also need to be updated if your dataset has different protocols for different participants. 
+       - You should also open an issue on this repo with the problems and solutions you encounter during processing. 
 
-Example: ```python studyID_fixer.py --data PPMI``` (parameters: dataset)
+### 7. Fix HeuDiConv errors
+   - If you see errors from BIDS validator, it is possible that HeuDiConv may not be supporting your MRI sequence. In that case add a function to [fix_heudiconv_issues.py](workflow/bids_conv/fix_heudiconv_issues.py) to manually rename files, and run the script posthoc. 
+   - Make sure to open an issue on [HeuDiConv Github](https://github.com/nipy/heudiconv/issues) for fix in future release. 
 
-2.2 **Reorganize dicom folders** to ```PPMI/sub/session/images/*.dcm``` with [HeuDiConv/reorganize_session.py] according to the downloading meta data table;
+### 8. Run MR image processing pipelines
+Curating dataset into BIDS format simplifies running several commonly used pipelines. Each pipeline follows similar steps:
+   - Specify pipeline container (i.e. Singularity image / recipe) 
+   - Run single participant test. This uses sample participant from /test_data/bids as input and generates output in the /test_data/<pipeline> dir. 
+   - Run entire dataset (provided single participant test is successful)
 
-Example: ```python reorganize_session.py --data PPMI --tab PPMI_3T_sdMRI_3_07_2022.csv``` (parameters: dataset, downloading meta data table)
+#### 8.1 [fMRIPrep](https://fmriprep.org/en/stable/) (including FreeSurfer) 
+   - Use [run_fmriprep](workflow/proc_pipe/fmriprep/run_fmriprep.py) script to run fmriprep pipeline. 
+      - Mandatory: For FreeSurfer tasks, **you need to have a [license.txt](https://surfer.nmr.mgh.harvard.edu/fswiki/License) file inside `<DATASET_ROOT>/derivatives/fmriprep`**
+      - Mandatory: fMRIPrep manages brain-template spaces using [TemplateFlow](https://fmriprep.org/en/stable/spaces.html). These templates can be shared across studies and datasets. Use [global configs](./workflow/global_configs.json) to specify path to `TEMPLATEFLOW_DIR` where these templates can reside. For machines with Internet connections, all required templates are automatically downloaded duing the fMRIPrep run. 
+      - You can run "anatomical only" workflow by adding `--anat_only` flag
+      - Optional: To ignore certain modalities / acquisitions you can create a `bids_filter.json` file. This is common when you have multiple T1w acquisitions (e.g. Neuromelanin, SPIR etc.) in the BIDS directory. See [sample_bids_filter.json](workflow/proc_pipe/fmriprep/sample_bids_filter.json) for an example. **Note that you can create a custom `bids_filter.json` by Copy+Renaming [sample_bids_filter.json](workflow/proc_pipe/fmriprep/sample_bids_filter.json). When `--use_bids_filter` flag is set, this `bids_filter.json` automatically gets copied into `<DATASET_ROOT>/bids/bids_filter.json` to be seen by the Singularity container.** 
+      - Similar to HeuDiConv, you can do a test run by adding `--test_run` flag. (Requires a BIDS participant directory inside `<DATASET_ROOT>/test_data/bids`)
+   - Example command:
+      - python run_fmriprep.py --global_config ../../global_configs.json --participant_id MNI01 --session_id 01 --use_bids_filter
+      - You can change default run parameters in the [run_fmriprep.sh](workflow/proc_pipe/fmriprep/scripts/run_fmriprep.sh) by looking at the [documentation](https://fmriprep.org/en/stable/usage.html)
 
-2.3 **Heudiconv Run_1** to enlist all the scans and protocols: [heudiconv_run1.sh](workflow/HeuDiConv/heudiconv_run1.sh)
+   - Main MR processing tasks run by fmriprep (see [fMRIPrep](https://fmriprep.org/en/stable/) for details):
+      - Preprocessing
+         - Bias correction / Intensity normalization (N4)
+         - Brain extraction (ANTs)
+         - Spatial normalization to standard space(s)
+      - Anatomical
+         - Tissue segmentation (FAST)
+         - FreeSurfer recon-all
+      - Functional
+         - BOLD reference image estimation
+         - Head-motion estimation
+         - Slice time correction
+         - Susceptibility Distortion Correction (SDC)
+         - Pre-processed BOLD in native space
+         - EPI to T1w registration
+         - Resampling BOLD runs onto standard spaces
+         - EPI sampled to FreeSurfer surfaces
+         - Confounds estimation
+         - ICA-AROMA (not run by default)
+      - Qualtiy Control
+         - [Visual reports](https://fmriprep.org/en/stable/outputs.html#visual-reports)
 
-Example: ```./heudiconv_run1.sh PPMI sge Y``` (parameters: dataset, HPC system, whether to clear existing folder)
+   - Validate output 
+      - You can check successful completion of the fmriprep run by confirming certain output files. The following two scripts will check `freesurfer` and `fmriprep` specific expeteced files independently.
+         - [fsvalidator](workflow/proc_pipe/fmriprep/fs_validator.py)
+         - [FS validator](workflow/proc_pipe/fmriprep/fmriprep_validator.py)
+      - You should also do a Visual QC using reports provided by fmriprep. 
+         - Look at the subject specific [html reports](https://fmriprep.org/en/stable/outputs.html#visual-reports)
+         - SDC correction [note](https://neurostars.org/t/weird-results-of-performing-susceptibility-distortion-correction-on-the-epi/20352/2): "It is expected that the frontal lobe shrank after SDC correction. Indeed P>A acquisition has a tendency to “inflate” this area, so SDC correction shrank it to its original shape. More importantly, the functional image after SDC should get closer to anatomical outline" 
 
-2.4 **Heudiconv Run_2** to create NIFTI files in BIDS format: [heudiconv_run2.sh](workflow/HeuDiConv/heudiconv_run2.sh)
+   - CLEANUP of working dir
+      - fmriprep run generates huge number of intermediate files. You should remove those after successful run to free-up space. 
+         - e.g. fmriprep_wf/
 
-Example: ```./heudiconv_run2.sh PPMI sge T1``` (parameters: dataset, HPC system, heuristics file to use all/T1)
+### TODO
+   
+#### [MRIQC](https://mriqc.readthedocs.io/en/stable/)
 
-2.5 **Heuristics files**:
+#### [TractoFlow](https://github.com/scilus/tractoflow)
 
-[PPMI_all images](workflow/HeuDiConv/Heuristics_PPMI_all.py)
-
-[PPMI_T1 only](workflow/HeuDiConv/Heuristics_PPMI_T1.py)
-
-**X** Will run BIDS validator run_bids_val.sh - this uses Singularity image created from Docker validator [have not ran by now]
-
-**Issues**
-
-The failed conversions are here: [failed conversions](HeuDiConv/err_subjects_conversion.txt)
-
-**3. Structural image processing using [fMRIPrep](https://github.com/nipreps/fmriprep) ver-20.2.7** (`workflow/fMRIPrep/*`)
-
-3.1 Generate the subject-session file for fMRIPrep preprocessing like ```ppmi_subject_session.csv, sdMRI_subject_session_rerun1.csv``` and the bids filter for the specific session like ```anat_ses-0.json```, tests and experiemnts in ```fMRIPrep_help.ipynb``` and run ```get_subj_ses.py``` on server;
-
-3.2  Run anatomical only processing of fMRIPrep with **fmriprep_anat_sub.sh**;
-
-Dataset level preproc example: ```./mr_proc/workflow/fMRIPrep/fmriprep_anat_sub.sh PPMI Y ppmi_subject_session.csv``` (parameters: dataset, whether to clear existing folder, subject-session table)
-
-Subject level preproc example: ```./mr_proc/workflow/fMRIPrep/fmriprep_anat_sub.sh PPMI Y sub-xxxx 0``` (parameters: dataset, whether to clear existing folder, subject id, session id)
-
-3.3  Currate results after preproc finsihed with **fmriprep_anat.format**, all the preprossed results will be zipped in 2 files (fmriprep, freesurfer) for easier data transfer.
-
-Example: ```./mr_proc/workflow/fMRIPrep/fmriprep_anat.format PPMI 0 20.2.7``` (parameters: dataset, session id, fMRIPrep version)
-
-**Issues**
-
-1. The failed subjects are listed in [sdMRI_subject_session_rerun1](fMRIPrep/sdMRI_subject_session_rerun1.csv), rerun finished;
-2. A simple QC script is created to check the output files in [fmriprep_simple_qc.py](workflow/fMRIPrep/fmriprep_simple_qc.py), it returns a rerun2 list [sdMRI_subject_session_rerun2.csv](workflow/fMRIPrep/sdMRI_subject_session_rerun2.csv), detailed QC report is stored in ```mr_proc/workflow/fMRIPrep/PPMI_ses-<session number>_fmriprep_anat_20.2.7_report.csv```;
-3. Rerun2 is running on CC.
-
-**4. Diffusion image processing using [TractoFlow](https://github.com/scilus/tractoflow) ver-???**
-
-Note done yet.
-
-**Issues**
-
-## Resources and references
-
-1. Ross's Python interface for working with Parkinson's Progression Markers Initiative (PPMI) data [pypmi](https://github.com/rmarkello/pypmi);
-2. [MRIQC](https://mriqc.readthedocs.io/en/stable/)
-3. [TractoFlow](https://github.com/scilus/tractoflow)
-4. [SPM](https://www.fil.ion.ucl.ac.uk/spm/)
-5. [MAGeT Brain](https://github.com/CoBrALab/MAGeTbrain)
+#### [MAGeT Brain](https://github.com/CoBrALab/MAGeTbrain)
