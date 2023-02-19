@@ -33,8 +33,8 @@ def infotodict(seqinfo):
     SWIPhase = create_key('sub-{subject}/{session}/swi/sub-{subject}_{session}_run-{item:01d}_part-phase_swi')
 
     #---------dwi-----------#
-    dkiFOR = create_key('sub-{subject}/{session}/dwi/sub-{subject}_{session}_acq-DKIFOR_run-{item:01d}_dwi')
-    dkiREV = create_key('sub-{subject}/{session}/dwi/sub-{subject}_{session}_acq-DKIREV_run-{item:01d}_dwi')
+    dkiFOR = create_key('sub-{subject}/{session}/dwi/sub-{subject}_{session}_dir-AP_run-{item:01d}_dwi')
+    dkiREV = create_key('sub-{subject}/{session}/dwi/sub-{subject}_{session}_dir-PA_run-{item:01d}_dwi')
     
     #---------fmap-----------#
     fmapMag = create_key('sub-{subject}/{session}/fmap/sub-{subject}_{session}_acq-bold_run-{item:01d}_magnitude')

@@ -2,10 +2,23 @@ import pandas as pd
 import numpy as np
 import glob
 import os
+import logging
 from pathlib import Path
 import shutil
 import pydicom
 
+# logger
+LOG_FILE = "../mr_proc.log"
+log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+logger = logging.getLogger(__name__)
+
+# Use FileHandler() to log to a file
+file_handler = logging.FileHandler(LOG_FILE, mode="a")
+formatter = logging.Formatter(log_format)
+file_handler.setFormatter(formatter)
+
+# Don't forget to add the file handler
+logger.addHandler(file_handler)
 
 def search_dicoms(raw_dicom_dir):
     """ Search and return list of dicom files from a scanner dicom-dir-tree output
@@ -27,7 +40,7 @@ def search_dicoms(raw_dicom_dir):
 
     if n_unique_dcm != n_dcms:
         n_duplicates = n_dcms - n_unique_dcm
-        print(f"Duplicate dicom names found for {n_duplicates} dcms")
+        logger.debug(f"Duplicate dicom names found for {n_duplicates} dcms")
 
     return unique_dcm, invalid_dicom_list
 
@@ -43,7 +56,7 @@ def copy_dicoms(filelist, dicom_dir, symlink=False):
             else:
                 shutil.copyfile(f, f"{dicom_dir}{f_basename}")
     else:
-        print(f"participant dicoms already exist")
+        logger.debug(f"participant dicoms already exist")
 
 def check_valid_dicom(f_dcm):
     """ checks if the file is vaild dicom
@@ -57,6 +70,6 @@ def check_valid_dicom(f_dcm):
         else:
             status = True
     except:
-        print(f"Error reading {f_dcm}")        
+        logger.debug(f"Error reading {f_dcm}")        
 
     return status

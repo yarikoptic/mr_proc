@@ -5,17 +5,34 @@ import os
 from pathlib import Path
 import argparse
 import json
+import logging
 from workflow.dicom_org.utils import search_dicoms, copy_dicoms
 from joblib import Parallel, delayed
 
 #Author: nikhil153
 #Date: 07-Oct-2022
+
+# logger
+LOG_FILE = "../mr_proc.log"
+log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+logger = logging.getLogger(__name__)
+
+logger.setLevel('INFO')
+
+# Use FileHandler() to log to a file
+file_handler = logging.FileHandler(LOG_FILE, mode="a")
+formatter = logging.Formatter(log_format)
+file_handler.setFormatter(formatter)
+
+# Don't forget to add the file handler
+logger.addHandler(file_handler)
+
 USE_SYMLINKS = True # Saves space and time! 
 
 def reorg(participant, global_configs, use_symlinks=True):
     """ Copy / Symlink raw dicoms into a flat participant dir
     """
-    print(f"\nparticipant_id: {participant}")
+    logger.info(f"\nparticipant_id: {participant}")
 
     DATASET_ROOT = global_configs["DATASET_ROOT"]
     raw_dicom_dir = f"{DATASET_ROOT}scratch/raw_dicom/"
@@ -24,7 +41,7 @@ def reorg(participant, global_configs, use_symlinks=True):
 
     participant_raw_dicom_dir = f"{raw_dicom_dir}{participant}/"
     raw_dcm_list, invalid_dicom_list = search_dicoms(participant_raw_dicom_dir)
-    print(f"n_raw_dicom: {len(raw_dcm_list)}, n_skipped (invalid/derived): {len(invalid_dicom_list)}")
+    logger.info(f"n_raw_dicom: {len(raw_dcm_list)}, n_skipped (invalid/derived): {len(invalid_dicom_list)}")
 
     # Remove non-alphanumeric chars (e.g. "_" from the participant_dir names)
     bids_participant = ''.join(filter(str.isalnum, participant))
@@ -48,10 +65,10 @@ def main(global_configs, n_jobs):
     log_dir = f"{DATASET_ROOT}scratch/logs/"
     mr_proc_manifest = f"{DATASET_ROOT}/tabular/demographics/mr_proc_manifest.csv"
 
-    print("-"*50)
-    print(f"Using DATASET_ROOT: {DATASET_ROOT}")
-    print(f"symlinks: {USE_SYMLINKS}")
-    print(f"Number of parallel jobs: {n_jobs}")
+    logger.info("-"*50)
+    logger.info(f"Using DATASET_ROOT: {DATASET_ROOT}")
+    logger.info(f"symlinks: {USE_SYMLINKS}")
+    logger.info(f"Number of parallel jobs: {n_jobs}")
 
     # read current participant manifest 
     manifest_df = pd.read_csv(mr_proc_manifest)
@@ -78,8 +95,8 @@ def main(global_configs, n_jobs):
     dicom_reorg_participants = set(participants) - set(current_dicom_dirs_participant_ids) - missing_dicom_dirs
     n_dicom_reorg_participants = len(dicom_reorg_participants)
 
-    print("-"*50)
-    print("Identifying participants to be reorganized\n"
+    logger.info("-"*50)
+    logger.info("Identifying participants to be reorganized\n"
     f"  n_particitpants: {n_participants}\n \
     n_particitpant_dicom_dirs: {n_participant_dicom_dirs}\n \
     n_available_dicom_dirs: {n_available_dicom_dirs}\n \
@@ -91,18 +108,18 @@ def main(global_configs, n_jobs):
         Path(f"{log_dir}").mkdir(parents=True, exist_ok=True)
 
         ## Process in parallel! 
-        print(f"\nStarting dicom reorg for {n_dicom_reorg_participants} participant(s)")
+        logger.info(f"\nStarting dicom reorg for {n_dicom_reorg_participants} participant(s)")
         Parallel(n_jobs=n_jobs)(delayed(reorg)(participant_id, global_configs, USE_SYMLINKS) for participant_id in dicom_reorg_participants)
 
-        print(f"\nDICOM reorg for {n_dicom_reorg_participants} participants completed")
-        print(f"Skipped (invalid/derived) DICOMs are listed here: {dicom_dir}invalid_dicom_list_file")
-        print(f"DICOMs are now copied into {dicom_dir} and ready for bids conversion!")
+        logger.info(f"\nDICOM reorg for {n_dicom_reorg_participants} participants completed")
+        logger.info(f"Skipped (invalid/derived) DICOMs are listed here: {dicom_dir}invalid_dicom_list_file")
+        logger.info(f"DICOMs are now copied into {dicom_dir} and ready for bids conversion!")
 
     else:
-        print(f"No new participants found for dicom reorg...")
+        logger.info(f"No new participants found for dicom reorg...")
 
-    print("-"*50)
-    print("")
+    logger.info("-"*50)
+    logger.info("")
 
 
 if __name__ == '__main__':

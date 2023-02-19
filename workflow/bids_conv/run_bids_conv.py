@@ -7,6 +7,7 @@ import pandas as pd
 import os
 from joblib import Parallel, delayed
 import glob
+import logging
 
 #Author: nikhil153
 #Date: 07-Oct-2022
@@ -14,8 +15,23 @@ TEST_RUN="0"
 fname = __file__
 CWD = os.path.dirname(os.path.abspath(fname))
 
+# logger
+LOG_FILE = "../mr_proc.log"
+log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+logger = logging.getLogger(__name__)
+
+logger.setLevel('INFO')
+
+# Use FileHandler() to log to a file
+file_handler = logging.FileHandler(LOG_FILE, mode="a")
+formatter = logging.Formatter(log_format)
+file_handler.setFormatter(formatter)
+
+# Don't forget to add the file handler
+logger.addHandler(file_handler)
+
 def run_heudiconv(participant_id, global_configs, session_id, stage):
-    print(f"\n***Processing participant: {participant_id}***")
+    logger.info(f"\n***Processing participant: {participant_id}***")
     DATASET_ROOT = global_configs["DATASET_ROOT"]
     DATASTORE_DIR = global_configs["DATASTORE_DIR"]
     SINGULARITY_PATH = global_configs["SINGULARITY_PATH"]
@@ -24,7 +40,7 @@ def run_heudiconv(participant_id, global_configs, session_id, stage):
     HEUDICONV_VERSION = global_configs["BIDS"]["heudiconv"]["VERSION"]
     HEUDICONV_CONTAINER = HEUDICONV_CONTAINER.format(HEUDICONV_VERSION)
     SINGULARITY_HEUDICONV = f"{CONTAINER_STORE}{HEUDICONV_CONTAINER}"
-    print(f"Using SINGULARITY_HEUDICONV: {SINGULARITY_HEUDICONV}")
+    logger.info(f"Using SINGULARITY_HEUDICONV: {SINGULARITY_HEUDICONV}")
     
     # Run HeuDiConv script
     HEUDICONV_SCRIPT = f"{CWD}/scripts/heudiconv_stage_{stage}.sh"
@@ -35,15 +51,15 @@ def run_heudiconv(participant_id, global_configs, session_id, stage):
     try:
         heudiconv_proc = subprocess.run(HEUDICONV_CMD)
     except Exception as e:
-        print(f"bids run failed with exceptions: {e}")
+        logger.error(f"bids run failed with exceptions: {e}")
 
 def main(global_configs, session_id, stage=2, n_jobs=2):
 
     DATASET_ROOT = global_configs["DATASET_ROOT"]
-    print("-"*50)
-    print(f"Using DATASET_ROOT: {DATASET_ROOT}")
-    print(f"Running HeuDiConv stage: {stage}")
-    print(f"Number of parallel jobs: {n_jobs}")
+    logger.info("-"*50)
+    logger.info(f"Using DATASET_ROOT: {DATASET_ROOT}")
+    logger.info(f"Running HeuDiConv stage: {stage}")
+    logger.info(f"Number of parallel jobs: {n_jobs}")
 
     mr_proc_manifest = f"{DATASET_ROOT}/tabular/demographics/mr_proc_manifest.csv"
     dicom_dir = f"{DATASET_ROOT}dicom/"
@@ -80,19 +96,19 @@ def main(global_configs, session_id, stage=2, n_jobs=2):
     heudiconv_participants = set(dicom_ids) - set(missing_dicom_dirs) - set(participant_bids_dirs_dicom_ids)
     n_heudiconv_participants = len(heudiconv_participants)
 
-    print("-"*50)
-    print("Identifying participants to be BIDSified\n"
+    logger.info("-"*50)
+    logger.info("Identifying participants to be BIDSified\n"
     f"  n_particitpants: {n_participants}\n \
     n_participant_bids_dirs: {n_participant_bids_dirs}\n \
     n_participant_dicom_dirs: {n_participant_dicom_dirs}\n \
     n_missing_dicom_dirs: {n_missing_dicom_dirs}\n \
     heudiconv participants to processes: {n_heudiconv_participants}")
-    print("-"*50)
+    logger.info("-"*50)
 
     if n_heudiconv_participants > 0:
         # Copy heuristic.py into "DATASET_ROOT/proc/heuristic.py"
         if stage == 2:
-            print(f"Copying ./heuristic.py to {DATASET_ROOT}/proc/heuristic.py (to be seen by Singularity container)")
+            logger.info(f"Copying ./heuristic.py to {DATASET_ROOT}/proc/heuristic.py (to be seen by Singularity container)")
             shutil.copyfile(f"{CWD}/heuristic.py", f"{DATASET_ROOT}/proc/heuristic.py")
 
         ## Process in parallel! 
@@ -101,15 +117,15 @@ def main(global_configs, session_id, stage=2, n_jobs=2):
         # Check succussful bids
         participant_bids_paths = glob.glob(f"{bids_dir}/sub-*")
         manifest_df.to_csv(mr_proc_manifest,index=None)
-        print("-"*50)
-        print(f"BIDS conversion completed for the new {n_heudiconv_participants} participants")
-        print(f"Current successfully converted BIDS participants: {len(participant_bids_paths)}")
+        logger.info("-"*50)
+        logger.info(f"BIDS conversion completed for the new {n_heudiconv_participants} participants")
+        logger.info(f"Current successfully converted BIDS participants: {len(participant_bids_paths)}")
         
     else:
-        print(f"No new participants found for bids conversion...")
+        logger.info(f"No new participants found for bids conversion...")
 
-    print("-"*50)
-    print("")
+    logger.info("-"*50)
+    logger.info("")
 
 if __name__ == '__main__':
     # argparse
