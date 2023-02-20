@@ -1,0 +1,27 @@
+{
+    "instrument": {
+        "name": "Digit Span Total (Raw score)", 
+        "reference": "",
+        "range": {
+            "min": 0, 
+            "max": 20,
+            "n/a": 999
+        },
+        "raw_data": "/home/nikhil/projects/Parkinsons/qpn/tabular/assessments/neuropysch/digit_span_test.xlsx",
+        "raw_sheet": "Parkinson patients",
+        "baseline_data": "/home/nikhil/projects/Parkinsons/qpn/tabular/assessments/neuropysch/digit_span_test.xlsx",
+        "baseline_sheet": "Norm Table Standards",
+        "normed_sheet": "Normed data",
+        "norming_procedure": "lookup_scaled_score",
+        "participant_id_column": "Patient #"
+    },
+
+    "stratification": {
+        "Age at time of assessment":{
+            "range_1": {
+                "min": 30, 
+                "max": 100
+            }
+        }
+    }
+}
