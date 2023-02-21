@@ -1,24 +1,30 @@
 {
     "instrument": {
-        "name": "Digit Span Total (Raw score)", 
-        "reference": "",
+        "raw_score_name": "Digit Span Total (Raw score)",
+        "normed_score_name": "Digit Span Total (Normed score)", 
+        "reference": "link to a document",
+        "dtype": "int",
         "range": {
             "min": 0, 
-            "max": 20,
+            "max": 32,
             "n/a": 999
         },
+        "norming_procedure": "lookup_scaled_score"
+    },
+    "data_paths": {
         "raw_data": "/home/nikhil/projects/Parkinsons/qpn/tabular/assessments/neuropysch/digit_span_test.xlsx",
         "raw_sheet": "Parkinson patients",
         "baseline_data": "/home/nikhil/projects/Parkinsons/qpn/tabular/assessments/neuropysch/digit_span_test.xlsx",
         "baseline_sheet": "Norm Table Standards",
-        "normed_sheet": "Normed data",
-        "norming_procedure": "lookup_scaled_score",
+        "normed_data": "/home/nikhil/projects/Parkinsons/qpn/tabular/assessments/neuropysch/digit_span_normed.xlsx",
+        "normed_sheet": "Normed data",        
         "participant_id_column": "Patient #"
-    },
+        },
 
     "stratification": {
         "Age at time of assessment":{
-            "range_1": {
+            "dtype": "int",
+            "range": {
                 "min": 30, 
                 "max": 100
             }
