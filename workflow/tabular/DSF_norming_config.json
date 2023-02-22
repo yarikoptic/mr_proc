@@ -3,7 +3,7 @@
         "raw_score_name": "Digit Span Total (Raw score)",
         "normed_score_name": "Digit Span Total (Normed score)", 
         "reference": "link to a document",
-        "dtype": "int",
+        "dtype": "continuous",
         "range": {
             "min": 0, 
             "max": 32,
@@ -23,11 +23,15 @@
 
     "stratification": {
         "Age at time of assessment":{
-            "dtype": "int",
+            "dtype": "continuous",
             "range": {
                 "min": 30, 
                 "max": 100
             }
+        },
+        "Sex (1=men; 2=women)":{
+            "dtype": "categorical",
+            "range": [1,2]
         }
     }
 }

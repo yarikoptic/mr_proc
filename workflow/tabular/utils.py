@@ -53,36 +53,40 @@ def get_valid_scores(df,instrument):
 
     print(f"\nPossible score range: ({min_val},{max_val})")
     print(f"Available score range: ({min_available_val},{max_available_val})")
-    invalid_df = df[~df[name].isin(range(min_val, max_val))] # (min <= score < max)
+    invalid_df = df[~df[name].isin(range(min_val, max_val+1))] # (min <= score < max)
     n_invalid_scores = len(invalid_df)
     if n_invalid_scores > 0:
         print(f"n_invalid_scores: {n_invalid_scores}")
         print(f"Using participants only with valid scores")
-        df = df[df[name].isin(range(min_val, max_val+1))]
+        df = df[df[name].isien(range(min_val, max_val+1))]
 
     return df
     
-def format_baseline_scores(df, strata_cols):
+def format_baseline_scores(df, stratification, raw_score_name):
     """ Format baseline score sheet so it can be filtered in pandas
     """
     baselines_ranges = {}
+    strata_cols = list(stratification.keys()) + [raw_score_name]
+
     for col in strata_cols: 
-        # check if column has ranges separate by "-" delimeter
-        # Convention: upper limit is not include for demographics and scores: e.g. (0-4) implies {0,1,2,3}
-        if df[col].str.contains("-").any():    
-            df[f"{col}_min"] = df[col].astype(str).str.split("-",expand=True)[0].astype(int)
-            df[f"{col}_max"] = df[col].astype(str).str.split("-",expand=True)[1]
-            df.loc[df[f"{col}_max"].isna(), f"{col}_max"] = df[f"{col}_min"].astype(int) + 1 #See Convention
-            df[f"{col}_max"] = df[f"{col}_max"].astype(int)  
-        else:
-            df[f"{col}_min"] = df[col].astype(int)
-            df[f"{col}_max"] = df[col].astype(int) + 1 #See Convention
+        # No need to parse categrical columns
+        if (stratification[col]["dtype"].lower() == "continuous"):
+            # check if column has ranges separate by "-" delimeter
+            # Convention: upper limit is not include for demographics and scores: e.g. (0-4) implies {0,1,2,3}
+            if df[col].str.contains("-").any():    
+                df[f"{col}_min"] = df[col].astype(str).str.split("-",expand=True)[0].astype(int)
+                df[f"{col}_max"] = df[col].astype(str).str.split("-",expand=True)[1]
+                df.loc[df[f"{col}_max"].isna(), f"{col}_max"] = df[f"{col}_min"].astype(int) + 1 #See Convention
+                df[f"{col}_max"] = df[f"{col}_max"].astype(int)  
+            else:
+                df[f"{col}_min"] = df[col].astype(int)
+                df[f"{col}_max"] = df[col].astype(int) + 1 #See Convention
+            
+            baselines_ranges[col] = (np.min(df[f"{col}_min"]), np.max(df[f"{col}_max"]))
         
-        baselines_ranges[col] = (np.min(df[f"{col}_min"]), np.max(df[f"{col}_max"]))
-    
     return df, baselines_ranges
 
-def get_normed_score(participant, baseline_df, raw_score_name, norming_procedure):
+def get_normed_score(participant, baseline_df, stratification, raw_score_name, norming_procedure="lookup_scaled_score"):
     """ Filter baseline scores and return match for a given participant
     """
     baseline_match_df = baseline_df.copy()
@@ -90,12 +94,14 @@ def get_normed_score(participant, baseline_df, raw_score_name, norming_procedure
     # Filter rows matching participant values
     # Convention: upper limit is not include for demographics and scores: e.g. (0-4) implies {0,1,2,3}
     for k,v in participant.items():
-        baseline_match_df = baseline_match_df[(baseline_match_df[f"{k}_min"] <= v) & 
-                                    (baseline_match_df[f"{k}_max"] > v) ] # see convention
+        if stratification[k]["dtype"] == "categorical":
+            baseline_match_df = baseline_match_df[(baseline_match_df[f"{k}"] == v)]
+        else:
+            baseline_match_df = baseline_match_df[(baseline_match_df[f"{k}_min"] <= v) & 
+                                        (baseline_match_df[f"{k}_max"] > v) ] # see convention
 
     # Deal with zero or > 1 matches
     if len(baseline_match_df) == 0:
-        # print(f"No matches found for participant: {participant.name}, {dict(participant)}")
         normed_score = np.nan
         note = "Strata not found"
         
