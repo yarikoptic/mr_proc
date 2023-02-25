@@ -77,6 +77,9 @@ def main(global_configs, session, use_symlinks, n_jobs):
 
     n_participants = len(participants)
 
+    # make session specific dicom subdir, if it doesn't exist
+    Path(dicom_dir).mkdir(parents=True, exist_ok=True)
+
     # check current dicom dir
     current_dicom_dirs = next(os.walk(dicom_dir))[1]
     n_participant_dicom_dirs = len(current_dicom_dirs)
