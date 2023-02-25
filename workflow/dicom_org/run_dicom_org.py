@@ -12,16 +12,15 @@ from joblib import Parallel, delayed
 #Author: nikhil153
 #Date: 07-Oct-2022
 
-def get_logger(log_dir, mode="w", level="DEBUG"):
+def get_logger(log_file, mode="w", level="DEBUG"):
     """ Initiate a new logger if not provided
     """
-    LOG_FILE = f"{log_dir}/dicom_org.log"
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     logger = logging.getLogger(__name__)
 
     logger.setLevel(level)
 
-    file_handler = logging.FileHandler(LOG_FILE, mode=mode)
+    file_handler = logging.FileHandler(log_file, mode=mode)
     formatter = logging.Formatter(log_format)
     file_handler.setFormatter(formatter)
 
@@ -55,15 +54,17 @@ def reorg(participant, raw_dicom_dir, dicom_dir, log_dir, logger, use_symlinks=T
         json.dump(invalid_dicom_dict, outfile, indent=4)
         
 
-def main(global_configs, session, use_symlinks, n_jobs):
+def run(global_configs, session, use_symlinks, n_jobs):
     # populate relative paths
     DATASET_ROOT = global_configs["DATASET_ROOT"]
     raw_dicom_dir = f"{DATASET_ROOT}/scratch/raw_dicom/{session}/"
     dicom_dir = f"{DATASET_ROOT}/dicom/{session}/"
     log_dir = f"{DATASET_ROOT}/scratch/logs/"
+    log_file = f"{log_dir}/dicom_org.log"
+
     mr_proc_manifest = f"{DATASET_ROOT}/tabular/demographics/mr_proc_manifest.csv"
 
-    logger = get_logger(log_dir)
+    logger = get_logger(log_file)
     logger.info("-"*50)
     logger.info(f"Using DATASET_ROOT: {DATASET_ROOT}")
     logger.info(f"symlinks: {use_symlinks}")
@@ -158,4 +159,4 @@ if __name__ == '__main__':
     use_symlinks = args.use_symlinks # Saves space and time! 
     n_jobs = args.n_jobs
 
-    main(global_configs, session, use_symlinks, n_jobs)
+    run(global_configs, session, use_symlinks, n_jobs)
