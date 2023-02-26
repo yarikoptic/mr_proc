@@ -68,6 +68,7 @@ def run(global_configs, session, use_symlinks, n_jobs):
     logger.info("-"*50)
     logger.info(f"Using DATASET_ROOT: {DATASET_ROOT}")
     logger.info(f"symlinks: {use_symlinks}")
+    logger.info(f"session: {session}")
     logger.info(f"Number of parallel jobs: {n_jobs}")
 
     # read current participant manifest 
@@ -100,7 +101,7 @@ def run(global_configs, session, use_symlinks, n_jobs):
 
     print("-"*50)
     print("Identifying participants to be reorganized\n"
-    f"  n_particitpants: {n_participants}\n \
+    f"n_particitpants: {n_participants}\n \
     n_particitpant_dicom_dirs: {n_participant_dicom_dirs}\n \
     n_available_dicom_dirs: {n_available_dicom_dirs}\n \
     n_missing_dicom_dirs: {n_missing_dicom_dirs}\n \
@@ -108,7 +109,7 @@ def run(global_configs, session, use_symlinks, n_jobs):
 
     logger.info("-"*50)
     logger.info("Identifying participants to be reorganized\n"
-    f"  n_particitpants: {n_participants}\n \
+    f"n_particitpants: {n_participants}\n \
     n_particitpant_dicom_dirs: {n_participant_dicom_dirs}\n \
     n_available_dicom_dirs: {n_available_dicom_dirs}\n \
     n_missing_dicom_dirs: {n_missing_dicom_dirs}\n \
