@@ -23,22 +23,24 @@ def get_logger(log_file, mode="w", level="DEBUG"):
     file_handler = logging.FileHandler(log_file, mode=mode)
     formatter = logging.Formatter(log_format)
     file_handler.setFormatter(formatter)
-
     logger.addHandler(file_handler)
 
+    # output to terminal as well
+    stream = logging.StreamHandler()
+    streamformat = logging.Formatter(log_format)
+    stream.setFormatter(streamformat)
+    logger.addHandler(stream)
+    
     return logger
 
-def reorg(participant, raw_dicom_dir, dicom_dir, log_dir, logger, use_symlinks=True):
+def reorg(participant, raw_dicom_dir, dicom_dir, invalid_dicom_dir, logger, use_symlinks=True):
     """ Copy / Symlink raw dicoms into a flat participant dir
     """
     logger.info(f"\nparticipant_id: {participant}")
-    # print(f"\nparticipant_id: {participant}")
 
     participant_raw_dicom_dir = f"{raw_dicom_dir}/{participant}/"
-    # print(f"participant_dir: {participant_raw_dicom_dir}")
     raw_dcm_list, invalid_dicom_list = search_dicoms(participant_raw_dicom_dir)
     logger.info(f"n_raw_dicom: {len(raw_dcm_list)}, n_skipped (invalid/derived): {len(invalid_dicom_list)}")
-    # print(f"n_raw_dicom: {len(raw_dcm_list)}, n_skipped (invalid/derived): {len(invalid_dicom_list)}")
 
     # Remove non-alphanumeric chars (e.g. "_" from the participant_dir names)
     bids_participant = ''.join(filter(str.isalnum, participant))
@@ -47,7 +49,7 @@ def reorg(participant, raw_dicom_dir, dicom_dir, log_dir, logger, use_symlinks=T
     copy_dicoms(raw_dcm_list, participant_dicom_dir, use_symlinks)
     
     # Log skipped invalid dicom list for the participant
-    invalid_dicoms_file = f"{log_dir}{participant}_invalid_dicoms.json"
+    invalid_dicoms_file = f"{invalid_dicom_dir}/{participant}_invalid_dicoms.json"
     invalid_dicom_dict = {participant: invalid_dicom_list}
     # Save skipped or invalid dicom file list
     with open(invalid_dicoms_file, "w") as outfile:
@@ -61,6 +63,7 @@ def run(global_configs, session, use_symlinks, n_jobs):
     dicom_dir = f"{DATASET_ROOT}/dicom/{session}/"
     log_dir = f"{DATASET_ROOT}/scratch/logs/"
     log_file = f"{log_dir}/dicom_org.log"
+    invalid_dicom_dir = f"{log_dir}/invalid_dicom_dir/"
 
     mr_proc_manifest = f"{DATASET_ROOT}/tabular/demographics/mr_proc_manifest.csv"
 
@@ -79,16 +82,22 @@ def run(global_configs, session, use_symlinks, n_jobs):
 
     n_participants = len(participants)
 
-    # make session specific dicom subdir, if it doesn't exist
-    Path(dicom_dir).mkdir(parents=True, exist_ok=True)
-
     # check current dicom dir
-    current_dicom_dirs = next(os.walk(dicom_dir))[1]
+    if Path.is_dir(Path(dicom_dir)):
+        current_dicom_dirs = next(os.walk(dicom_dir))[1]
+    else:
+        current_dicom_dirs = []
+
     n_participant_dicom_dirs = len(current_dicom_dirs)
     current_dicom_dirs_participant_ids = manifest_df[manifest_df["dicom_ids"].isin(current_dicom_dirs)]["participant_id"]
 
-    # check raw dicom dir
-    available_dicom_dirs = next(os.walk(raw_dicom_dir))[1]
+    # check raw dicom dir    
+    if Path.is_dir(Path(raw_dicom_dir)):
+        available_dicom_dirs = next(os.walk(raw_dicom_dir))[1]        
+    else:
+        available_dicom_dirs = []
+        logger.warning(f"raw dicom dir for {session} does not exist")
+        
     n_available_dicom_dirs = len(available_dicom_dirs)
 
     # check mismatch between manifest and raw_dicoms
@@ -99,43 +108,35 @@ def run(global_configs, session, use_symlinks, n_jobs):
     dicom_reorg_participants = set(participants) - set(current_dicom_dirs_participant_ids) - missing_dicom_dirs
     n_dicom_reorg_participants = len(dicom_reorg_participants)
 
-    print("-"*50)
-    print("Identifying participants to be reorganized\n"
-    f"n_particitpants: {n_participants}\n \
-    n_particitpant_dicom_dirs: {n_participant_dicom_dirs}\n \
-    n_available_dicom_dirs: {n_available_dicom_dirs}\n \
-    n_missing_dicom_dirs: {n_missing_dicom_dirs}\n \
-    dicom_reorg_participants: {n_dicom_reorg_participants}")
-
     logger.info("-"*50)
-    logger.info("Identifying participants to be reorganized\n"
-    f"n_particitpants: {n_participants}\n \
-    n_particitpant_dicom_dirs: {n_participant_dicom_dirs}\n \
+    logger.info(f"Identifying participants to be reorganized\n \
+    n_particitpants (listed in the mr_proc_manifest): {n_participants}\n \
+    n_particitpant_dicom_dirs (current): {n_participant_dicom_dirs}\n \
     n_available_dicom_dirs: {n_available_dicom_dirs}\n \
     n_missing_dicom_dirs: {n_missing_dicom_dirs}\n \
     dicom_reorg_participants: {n_dicom_reorg_participants}")
 
     # start reorganizing
     if n_dicom_reorg_participants > 0:
+        # make session specific dicom subdir, if needed
+        Path(dicom_dir).mkdir(parents=True, exist_ok=True)
+        # make log dirs
         Path(f"{log_dir}").mkdir(parents=True, exist_ok=True)
+        Path(invalid_dicom_dir).mkdir(parents=True, exist_ok=True)
 
         ## Process in parallel! 
         logger.info(f"\nStarting dicom reorg for {n_dicom_reorg_participants} participant(s)")
-        Parallel(n_jobs=n_jobs)(delayed(reorg)(participant_id, raw_dicom_dir, dicom_dir, log_dir, logger, use_symlinks) for participant_id in dicom_reorg_participants)
+        Parallel(n_jobs=n_jobs)(delayed(reorg)(participant_id, raw_dicom_dir, dicom_dir, invalid_dicom_dir, logger, use_symlinks) for participant_id in dicom_reorg_participants)
 
-        print(f"\nDICOM reorg for {n_dicom_reorg_participants} participants completed")
-        print(f"Skipped (invalid/derived) DICOMs are listed here: {log_dir}")
-        print(f"DICOMs are now copied into {dicom_dir} and ready for bids conversion!")
         logger.info(f"\nDICOM reorg for {n_dicom_reorg_participants} participants completed")
         logger.info(f"Skipped (invalid/derived) DICOMs are listed here: {log_dir}")
         logger.info(f"DICOMs are now copied into {dicom_dir} and ready for bids conversion!")
 
     else:
-        print(f"No new participants found for dicom reorg...")
         logger.info(f"No new participants found for dicom reorg...")
+        
+    logger.info("-"*50)
 
-    print("-"*50)
-    print("")
 
 
 if __name__ == '__main__':
