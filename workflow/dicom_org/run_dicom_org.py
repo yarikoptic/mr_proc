@@ -89,7 +89,8 @@ def run(global_configs, session, use_symlinks, n_jobs):
         current_dicom_dirs = []
 
     n_participant_dicom_dirs = len(current_dicom_dirs)
-    current_dicom_dirs_participant_ids = manifest_df[manifest_df["dicom_ids"].isin(current_dicom_dirs)]["participant_id"]
+    current_dicom_dirs_participant_ids = list(manifest_df[manifest_df["dicom_ids"].isin(current_dicom_dirs)]["participant_id"].astype(str).values)
+    print(participants, current_dicom_dirs_participant_ids)
 
     # check raw dicom dir    
     if Path.is_dir(Path(raw_dicom_dir)):
