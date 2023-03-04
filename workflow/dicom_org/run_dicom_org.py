@@ -33,18 +33,19 @@ def get_logger(log_file, mode="w", level="DEBUG"):
     
     return logger
 
-def reorg(participant, raw_dicom_dir, dicom_dir, invalid_dicom_dir, logger, use_symlinks=True):
+def reorg(participant, dicom_file, raw_dicom_dir, dicom_dir, invalid_dicom_dir, logger, use_symlinks=True):
     """ Copy / Symlink raw dicoms into a flat participant dir
     """
     logger.info(f"\nparticipant_id: {participant}")
 
-    participant_raw_dicom_dir = f"{raw_dicom_dir}/{participant}/"
+    participant_raw_dicom_dir = f"{raw_dicom_dir}/{dicom_file}/"
+
     raw_dcm_list, invalid_dicom_list = search_dicoms(participant_raw_dicom_dir)
     logger.info(f"n_raw_dicom: {len(raw_dcm_list)}, n_skipped (invalid/derived): {len(invalid_dicom_list)}")
 
     # Remove non-alphanumeric chars (e.g. "_" from the participant_dir names)
-    bids_participant = ''.join(filter(str.isalnum, participant))
-    participant_dicom_dir = f"{dicom_dir}{bids_participant}/"
+    dicom_id = ''.join(filter(str.isalnum, participant))
+    participant_dicom_dir = f"{dicom_dir}/{dicom_id}/"
     
     copy_dicoms(raw_dcm_list, participant_dicom_dir, use_symlinks)
     
@@ -56,7 +57,9 @@ def reorg(participant, raw_dicom_dir, dicom_dir, invalid_dicom_dir, logger, use_
         json.dump(invalid_dicom_dict, outfile, indent=4)
         
 
-def run(global_configs, session, use_symlinks, n_jobs):
+def run(global_configs, session_id, use_symlinks, n_jobs):
+    session = f"ses-{session_id}"
+
     # populate relative paths
     DATASET_ROOT = global_configs["DATASET_ROOT"]
     raw_dicom_dir = f"{DATASET_ROOT}/scratch/raw_dicom/{session}/"
@@ -66,7 +69,7 @@ def run(global_configs, session, use_symlinks, n_jobs):
     invalid_dicom_dir = f"{log_dir}/invalid_dicom_dir/"
 
     mr_proc_manifest = f"{DATASET_ROOT}/tabular/demographics/mr_proc_manifest.csv"
-
+    
     logger = get_logger(log_file)
     logger.info("-"*50)
     logger.info(f"Using DATASET_ROOT: {DATASET_ROOT}")
@@ -76,10 +79,22 @@ def run(global_configs, session, use_symlinks, n_jobs):
 
     # read current participant manifest 
     manifest_df = pd.read_csv(mr_proc_manifest)
-    participants = manifest_df["participant_id"].astype(str).str.strip().values
-    manifest_df["dicom_ids"] = [''.join(filter(str.isalnum, idx)) for idx in participants]
-    dicom_ids = manifest_df["dicom_ids"]
 
+    # filter session
+    manifest_df["session_id"] = manifest_df["session_id"].astype(str)
+    manifest_df = manifest_df[manifest_df["session_id"] == session_id]
+    
+    manifest_df["participant_id"] = manifest_df["participant_id"].astype(str)
+    participants = manifest_df["participant_id"].str.strip().values
+    manifest_df["dicom_id"] = [''.join(filter(str.isalnum, idx)) for idx in participants]
+
+    if "dicom_file" in manifest_df.columns:
+        logger.info("Using dicom filename from the manifest.csv") 
+    else:
+        logger.warning("dicom_file is not specified in the manifest.csv")
+        logger.info("Assuming dicom_id is the dicom filename") 
+        manifest_df["dicom_file"] = manifest_df["dicom_id"].copy()
+        
     n_participants = len(participants)
 
     # check current dicom dir
@@ -89,31 +104,38 @@ def run(global_configs, session, use_symlinks, n_jobs):
         current_dicom_dirs = []
 
     n_participant_dicom_dirs = len(current_dicom_dirs)
-    current_dicom_dirs_participant_ids = list(manifest_df[manifest_df["dicom_ids"].isin(current_dicom_dirs)]["participant_id"].astype(str).values)
-    print(participants, current_dicom_dirs_participant_ids)
+    current_dicom_dirs_participant_ids = set(manifest_df[manifest_df["dicom_id"].isin(current_dicom_dirs)]["participant_id"].astype(str).values)
 
     # check raw dicom dir    
     if Path.is_dir(Path(raw_dicom_dir)):
-        available_dicom_dirs = next(os.walk(raw_dicom_dir))[1]        
+        available_raw_dicom_dirs = next(os.walk(raw_dicom_dir))[1]        
     else:
-        available_dicom_dirs = []
+        available_raw_dicom_dirs = []
         logger.warning(f"raw dicom dir for {session} does not exist")
         
-    n_available_dicom_dirs = len(available_dicom_dirs)
+    n_available_raw_dicom_dirs = len(available_raw_dicom_dirs)
+    available_raw_dicom_dirs_participant_ids = list(manifest_df[manifest_df["dicom_file"].isin(available_raw_dicom_dirs)]["participant_id"].astype(str).values)
 
     # check mismatch between manifest and raw_dicoms
-    missing_dicom_dirs = set(participants) - set(available_dicom_dirs)
-    n_missing_dicom_dirs = len(missing_dicom_dirs)
+    missing_dicom_dir_participant_ids = set(participants) - set(available_raw_dicom_dirs_participant_ids)
+    n_missing_dicom_dirs = len(missing_dicom_dir_participant_ids)
 
     # identify participants to be reorganized 
-    dicom_reorg_participants = set(participants) - set(current_dicom_dirs_participant_ids) - missing_dicom_dirs
+    logger.info("-"*25)
+    print(set(participants))
+    print(current_dicom_dirs_participant_ids)
+    print(missing_dicom_dir_participant_ids)
+    logger.info("-"*25)
+    dicom_reorg_participants = set(participants) - current_dicom_dirs_participant_ids - missing_dicom_dir_participant_ids
     n_dicom_reorg_participants = len(dicom_reorg_participants)
+
+    reorg_df = manifest_df[manifest_df["participant_id"].isin(dicom_reorg_participants)]
 
     logger.info("-"*50)
     logger.info(f"Identifying participants to be reorganized\n \
     n_particitpants (listed in the mr_proc_manifest): {n_participants}\n \
     n_particitpant_dicom_dirs (current): {n_participant_dicom_dirs}\n \
-    n_available_dicom_dirs: {n_available_dicom_dirs}\n \
+    n_available_dicom_dirs: {n_available_raw_dicom_dirs}\n \
     n_missing_dicom_dirs: {n_missing_dicom_dirs}\n \
     dicom_reorg_participants: {n_dicom_reorg_participants}")
 
@@ -125,9 +147,18 @@ def run(global_configs, session, use_symlinks, n_jobs):
         Path(f"{log_dir}").mkdir(parents=True, exist_ok=True)
         Path(invalid_dicom_dir).mkdir(parents=True, exist_ok=True)
 
-        ## Process in parallel! 
-        logger.info(f"\nStarting dicom reorg for {n_dicom_reorg_participants} participant(s)")
-        Parallel(n_jobs=n_jobs)(delayed(reorg)(participant_id, raw_dicom_dir, dicom_dir, invalid_dicom_dir, logger, use_symlinks) for participant_id in dicom_reorg_participants)
+        if n_jobs > 1:
+            ## Process in parallel! (Won't write to logs)
+            logger.info(f"\nStarting dicom reorg for {n_dicom_reorg_participants} participant(s)")
+            Parallel(n_jobs=n_jobs)(delayed(reorg)(
+                participant_id, dicom_id, raw_dicom_dir, dicom_dir, invalid_dicom_dir, logger, use_symlinks
+                ) 
+                for participant_id, dicom_id in list(zip(reorg_df["participant_id"], reorg_df["dicom_file"]))
+            )
+
+        else: # Useful for debugging
+            for participant_id, dicom_id in list(zip(reorg_df["participant_id"], reorg_df["dicom_file"])):
+                reorg(participant_id, dicom_id, raw_dicom_dir, dicom_dir, invalid_dicom_dir, logger, use_symlinks) 
 
         logger.info(f"\nDICOM reorg for {n_dicom_reorg_participants} participants completed")
         logger.info(f"Skipped (invalid/derived) DICOMs are listed here: {log_dir}")
@@ -137,7 +168,6 @@ def run(global_configs, session, use_symlinks, n_jobs):
         logger.info(f"No new participants found for dicom reorg...")
         
     logger.info("-"*50)
-
 
 
 if __name__ == '__main__':
@@ -158,8 +188,7 @@ if __name__ == '__main__':
         global_configs = json.load(f)
 
     session_id = args.session_id
-    session = f"ses-{session_id}"
     use_symlinks = args.use_symlinks # Saves space and time! 
     n_jobs = args.n_jobs
 
-    run(global_configs, session, use_symlinks, n_jobs)
+    run(global_configs, session_id, use_symlinks, n_jobs)
