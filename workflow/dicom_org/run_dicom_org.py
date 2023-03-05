@@ -58,6 +58,9 @@ def reorg(participant, dicom_file, raw_dicom_dir, dicom_dir, invalid_dicom_dir, 
         
 
 def run(global_configs, session_id, use_symlinks, n_jobs):
+    """ Runs the dicom reorg tasks 
+    """
+    
     session = f"ses-{session_id}"
 
     # populate relative paths
@@ -86,6 +89,8 @@ def run(global_configs, session_id, use_symlinks, n_jobs):
     
     manifest_df["participant_id"] = manifest_df["participant_id"].astype(str)
     participants = manifest_df["participant_id"].str.strip().values
+
+    # generate dicom_id
     manifest_df["dicom_id"] = [''.join(filter(str.isalnum, idx)) for idx in participants]
 
     if "dicom_file" in manifest_df.columns:
@@ -121,26 +126,22 @@ def run(global_configs, session_id, use_symlinks, n_jobs):
     n_missing_dicom_dirs = len(missing_dicom_dir_participant_ids)
 
     # identify participants to be reorganized 
-    logger.info("-"*25)
-    print(set(participants))
-    print(current_dicom_dirs_participant_ids)
-    print(missing_dicom_dir_participant_ids)
-    logger.info("-"*25)
     dicom_reorg_participants = set(participants) - current_dicom_dirs_participant_ids - missing_dicom_dir_participant_ids
     n_dicom_reorg_participants = len(dicom_reorg_participants)
 
     reorg_df = manifest_df[manifest_df["participant_id"].isin(dicom_reorg_participants)]
 
     logger.info("-"*50)
-    logger.info(f"Identifying participants to be reorganized\n \
+    logger.info(f"Identifying participants to be reorganized\n\n \
     n_particitpants (listed in the mr_proc_manifest): {n_participants}\n \
     n_particitpant_dicom_dirs (current): {n_participant_dicom_dirs}\n \
     n_available_dicom_dirs: {n_available_raw_dicom_dirs}\n \
     n_missing_dicom_dirs: {n_missing_dicom_dirs}\n \
-    dicom_reorg_participants: {n_dicom_reorg_participants}")
+    dicom_reorg_participants: {n_dicom_reorg_participants}\n")
 
     # start reorganizing
     if n_dicom_reorg_participants > 0:
+        logger.info(f"\nStarting dicom reorg for {n_dicom_reorg_participants} participant(s)")
         # make session specific dicom subdir, if needed
         Path(dicom_dir).mkdir(parents=True, exist_ok=True)
         # make log dirs
@@ -148,8 +149,7 @@ def run(global_configs, session_id, use_symlinks, n_jobs):
         Path(invalid_dicom_dir).mkdir(parents=True, exist_ok=True)
 
         if n_jobs > 1:
-            ## Process in parallel! (Won't write to logs)
-            logger.info(f"\nStarting dicom reorg for {n_dicom_reorg_participants} participant(s)")
+            ## Process in parallel! (Won't write to logs)            
             Parallel(n_jobs=n_jobs)(delayed(reorg)(
                 participant_id, dicom_id, raw_dicom_dir, dicom_dir, invalid_dicom_dir, logger, use_symlinks
                 ) 

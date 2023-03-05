@@ -92,8 +92,10 @@ def run_heudiconv(participant_id, global_configs, session_id, stage, logger):
     except Exception as e:
         logger.error(f"bids run failed with exceptions: {e}")
 
-def run(global_configs, session, stage=2, n_jobs=2):
-
+def run(global_configs, session_id, stage=2, n_jobs=2):
+    """ Runs the bids conv tasks 
+    """
+    session = f"ses-{session_id}"
     DATASET_ROOT = global_configs["DATASET_ROOT"]
     log_dir = f"{DATASET_ROOT}/scratch/logs/"
     log_file = f"{log_dir}/bids_conv.log"
@@ -110,63 +112,80 @@ def run(global_configs, session, stage=2, n_jobs=2):
 
     # read current participant manifest 
     manifest_df = pd.read_csv(mr_proc_manifest)
-    participants = manifest_df["participant_id"].astype(str).str.strip().values
+
+    # filter session
+    manifest_df["session_id"] = manifest_df["session_id"].astype(str)
+    manifest_df = manifest_df[manifest_df["session_id"] == session_id]
+    
+    manifest_df["participant_id"] = manifest_df["participant_id"].astype(str)
+    participants = manifest_df["participant_id"].str.strip().values
     n_participants = len(participants)
 
-    # generate bids_id
+    # generate dicom_id
     manifest_df["dicom_id"] = [''.join(filter(str.isalnum, idx)) for idx in participants]
-    manifest_df["bids_id"] = "sub-" + manifest_df["dicom_id"].astype(str)
     dicom_ids = list(manifest_df["dicom_id"])
+
+    # generate bids_id
+    manifest_df["bids_id"] = "sub-" + manifest_df["dicom_id"].astype(str)
     bids_ids = list(manifest_df["bids_id"])
 
     # available participant dicom dirs
     if Path.is_dir(Path(dicom_dir)):
-        participant_dicom_dirs = next(os.walk(dicom_dir))[1]
+        available_dicom_dirs = next(os.walk(dicom_dir))[1]
     else:
-        participant_dicom_dirs = []
+        available_dicom_dirs = []
         logger.warning(f"dicom dirs for {session} does not exist")
 
-    participant_dicom_dirs = set(dicom_ids) & set(participant_dicom_dirs)
-    n_participant_dicom_dirs = len(participant_dicom_dirs)
+    available_dicom_dirs = set(dicom_ids) & set(available_dicom_dirs)
+    n_available_dicom_dirs = len(available_dicom_dirs)
 
     # available participant bids dirs (for particular session)
-    participant_bids_dirs = next(os.walk(bids_dir))[1]
-    participant_bids_session_dirs = []
-    for pbd in participant_bids_dirs:
+    current_bids_dirs = next(os.walk(bids_dir))[1]
+    current_bids_session_dirs = []
+    for pbd in current_bids_dirs:
         ses_dir_path = Path(f"{bids_dir}/{pbd}/{session}")
         if Path.is_dir(ses_dir_path):
-            participant_bids_session_dirs.append(pbd)
+            current_bids_session_dirs.append(pbd)
 
-    participant_bids_dirs = set(bids_ids) & set(participant_bids_session_dirs)
-    n_participant_bids_dirs = len(participant_bids_dirs)
+    current_bids_dirs = set(bids_ids) & set(current_bids_session_dirs)
+    n_current_bids_dirs = len(current_bids_dirs)
 
     # check mismatch between manifest and participant dicoms
-    missing_dicom_dirs = set(dicom_ids) - set(participant_dicom_dirs)
+    missing_dicom_dirs = set(dicom_ids) - set(available_dicom_dirs)
     n_missing_dicom_dirs = len(missing_dicom_dirs)
 
-    participant_bids_dirs_dicom_ids = manifest_df[manifest_df["bids_id"].isin(participant_bids_dirs)]["dicom_id"]
+    current_bids_dirs_dicom_ids = manifest_df[manifest_df["bids_id"].isin(current_bids_dirs)]["dicom_id"]
 
     # participants to process with Heudiconv
-    heudiconv_participants = set(dicom_ids) - set(missing_dicom_dirs) - set(participant_bids_dirs_dicom_ids)
+    heudiconv_participants = set(dicom_ids) - set(missing_dicom_dirs) - set(current_bids_dirs_dicom_ids)
     n_heudiconv_participants = len(heudiconv_participants)
 
     logger.info("-"*50)
-    logger.info(f"Identifying participants to be BIDSified\n \
+    logger.info(f"Identifying participants to be BIDSified\n\n \
     n_particitpants (listed in the mr_proc_manifest): {n_participants}\n \
-    n_participant_bids_dirs (current): {n_participant_bids_dirs}\n \
-    n_participant_dicom_dirs (available): {n_participant_dicom_dirs}\n \
+    n_current_bids_dirs (current): {n_current_bids_dirs}\n \
+    n_available_dicom_dirs (available): {n_available_dicom_dirs}\n \
     n_missing_dicom_dirs: {n_missing_dicom_dirs}\n \
-    heudiconv participants to processes: {n_heudiconv_participants}")
+    heudiconv participants to processes: {n_heudiconv_participants}\n")
     logger.info("-"*50)
 
     if n_heudiconv_participants > 0:
-        # Copy heuristic.py into "DATASET_ROOT/proc/heuristic.py"
+        logger.info(f"\nStarting bids conversion for {n_heudiconv_participants} participant(s)")
+    
         if stage == 2:
             logger.info(f"Copying ./heuristic.py to {DATASET_ROOT}/proc/heuristic.py (to be seen by Singularity container)")
             shutil.copyfile(f"{CWD}/heuristic.py", f"{DATASET_ROOT}/proc/heuristic.py")
 
-        ## Process in parallel! 
-        Parallel(n_jobs=n_jobs)(delayed(run_heudiconv)(participant_id, global_configs, session_id, stage, logger) for participant_id in heudiconv_participants)
+        if n_jobs > 1:
+            ## Process in parallel! (Won't write to logs)
+            Parallel(n_jobs=n_jobs)(delayed(run_heudiconv)(
+                participant_id, global_configs, session_id, stage, logger
+                ) for participant_id in heudiconv_participants)
+
+        else:
+            # Useful for debugging
+            for participant_id in heudiconv_participants:
+                run_heudiconv(participant_id, global_configs, session_id, stage, logger) 
 
         # Check succussful bids
         participant_bids_paths = glob.glob(f"{bids_dir}/sub-*")
@@ -197,7 +216,6 @@ if __name__ == '__main__':
 
     global_config_file = args.global_config
     session_id = args.session_id
-    session = f"ses-{session_id}"
     stage = args.stage
     n_jobs = args.n_jobs
 
@@ -205,4 +223,4 @@ if __name__ == '__main__':
     with open(global_config_file, 'r') as f:
         global_configs = json.load(f)
 
-    run(global_configs, session, stage, n_jobs)
+    run(global_configs, session_id, stage, n_jobs)
