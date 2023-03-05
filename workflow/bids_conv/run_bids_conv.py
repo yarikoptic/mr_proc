@@ -8,6 +8,7 @@ import os
 from joblib import Parallel, delayed
 import glob
 import logging
+import workflow.catalog as catalog
 
 #Author: nikhil153
 #Date: 07-Oct-2022
@@ -36,8 +37,8 @@ def get_logger(log_file, mode="w", level="DEBUG"):
     
     return logger
 
-def run_heudiconv(participant_id, global_configs, session_id, stage, logger):
-    logger.info(f"\n***Processing participant: {participant_id}***")
+def run_heudiconv(dicom_id, global_configs, session_id, stage, logger):
+    logger.info(f"\n***Processing participant: {dicom_id}***")
     DATASET_ROOT = global_configs["DATASET_ROOT"]
     DATASTORE_DIR = global_configs["DATASTORE_DIR"]
     SINGULARITY_PATH = global_configs["SINGULARITY_PATH"]
@@ -64,7 +65,7 @@ def run_heudiconv(participant_id, global_configs, session_id, stage, logger):
     if stage == 1:
         logger.info("Running stage 1")
         Heudiconv_CMD = f" -d {SINGULARITY_DICOM_DIR}/{subject}/* \
-            -s {participant_id} -c none \
+            -s {dicom_id} -c none \
             -f convertall \
             -o {SINGULARITY_BIDS_DIR} \
             --overwrite \
@@ -73,7 +74,7 @@ def run_heudiconv(participant_id, global_configs, session_id, stage, logger):
     elif stage == 2:
         logger.info("Running stage 2")
         Heudiconv_CMD = f" -d {SINGULARITY_DICOM_DIR}/{subject}/* \
-            -s {participant_id} -c none \
+            -s {dicom_id} -c none \
             -f {HEURISTIC_FILE} \
             --grouping studyUID \
             -c dcm2niix -b --overwrite --minmeta \
@@ -110,64 +111,10 @@ def run(global_configs, session_id, stage=2, n_jobs=2):
     dicom_dir = f"{DATASET_ROOT}/dicom/{session}/"
     bids_dir = f"{DATASET_ROOT}/bids/"
 
-    # read current participant manifest 
-    manifest_df = pd.read_csv(mr_proc_manifest)
-
-    # filter session
-    manifest_df["session_id"] = manifest_df["session_id"].astype(str)
-    manifest_df = manifest_df[manifest_df["session_id"] == session_id]
-    
-    manifest_df["participant_id"] = manifest_df["participant_id"].astype(str)
-    participants = manifest_df["participant_id"].str.strip().values
-    n_participants = len(participants)
-
-    # generate dicom_id
-    manifest_df["dicom_id"] = [''.join(filter(str.isalnum, idx)) for idx in participants]
-    dicom_ids = list(manifest_df["dicom_id"])
-
-    # generate bids_id
-    manifest_df["bids_id"] = "sub-" + manifest_df["dicom_id"].astype(str)
-    bids_ids = list(manifest_df["bids_id"])
-
-    # available participant dicom dirs
-    if Path.is_dir(Path(dicom_dir)):
-        available_dicom_dirs = next(os.walk(dicom_dir))[1]
-    else:
-        available_dicom_dirs = []
-        logger.warning(f"dicom dirs for {session} does not exist")
-
-    available_dicom_dirs = set(dicom_ids) & set(available_dicom_dirs)
-    n_available_dicom_dirs = len(available_dicom_dirs)
-
-    # available participant bids dirs (for particular session)
-    current_bids_dirs = next(os.walk(bids_dir))[1]
-    current_bids_session_dirs = []
-    for pbd in current_bids_dirs:
-        ses_dir_path = Path(f"{bids_dir}/{pbd}/{session}")
-        if Path.is_dir(ses_dir_path):
-            current_bids_session_dirs.append(pbd)
-
-    current_bids_dirs = set(bids_ids) & set(current_bids_session_dirs)
-    n_current_bids_dirs = len(current_bids_dirs)
-
-    # check mismatch between manifest and participant dicoms
-    missing_dicom_dirs = set(dicom_ids) - set(available_dicom_dirs)
-    n_missing_dicom_dirs = len(missing_dicom_dirs)
-
-    current_bids_dirs_dicom_ids = manifest_df[manifest_df["bids_id"].isin(current_bids_dirs)]["dicom_id"]
-
     # participants to process with Heudiconv
-    heudiconv_participants = set(dicom_ids) - set(missing_dicom_dirs) - set(current_bids_dirs_dicom_ids)
+    heudiconv_df = catalog.get_new_dicoms(mr_proc_manifest, dicom_dir, bids_dir, session_id, logger)
+    heudiconv_participants = list(heudiconv_df["dicom_id"].values)
     n_heudiconv_participants = len(heudiconv_participants)
-
-    logger.info("-"*50)
-    logger.info(f"Identifying participants to be BIDSified\n\n \
-    n_particitpants (listed in the mr_proc_manifest): {n_participants}\n \
-    n_current_bids_dirs (current): {n_current_bids_dirs}\n \
-    n_available_dicom_dirs (available): {n_available_dicom_dirs}\n \
-    n_missing_dicom_dirs: {n_missing_dicom_dirs}\n \
-    heudiconv participants to processes: {n_heudiconv_participants}\n")
-    logger.info("-"*50)
 
     if n_heudiconv_participants > 0:
         logger.info(f"\nStarting bids conversion for {n_heudiconv_participants} participant(s)")
@@ -179,17 +126,25 @@ def run(global_configs, session_id, stage=2, n_jobs=2):
         if n_jobs > 1:
             ## Process in parallel! (Won't write to logs)
             Parallel(n_jobs=n_jobs)(delayed(run_heudiconv)(
-                participant_id, global_configs, session_id, stage, logger
-                ) for participant_id in heudiconv_participants)
+                dicom_id, global_configs, session_id, stage, logger
+                ) for dicom_id in heudiconv_participants)
 
         else:
             # Useful for debugging
-            for participant_id in heudiconv_participants:
-                run_heudiconv(participant_id, global_configs, session_id, stage, logger) 
+            for dicom_id in heudiconv_participants:
+                run_heudiconv(dicom_id, global_configs, session_id, stage, logger) 
 
         # Check succussful bids
         participant_bids_paths = glob.glob(f"{bids_dir}/sub-*")
-        manifest_df.to_csv(mr_proc_manifest,index=None)
+        
+        # Add newly processed bids_id to the manifest csv
+        manifest_df = pd.read_csv(mr_proc_manifest)
+        manifest_df.loc[(manifest_df["participant_id"].astype(str).isin(heudiconv_df["participant_id"]))
+                         & (manifest_df["session_id"].astype(str) == str(session_id)), 
+                         "bids_id"] = heudiconv_df["bids_id"]
+
+        manifest_df.to_csv(mr_proc_manifest, index=None)
+        
         logger.info("-"*50)
         logger.info(f"BIDS conversion completed for the {n_heudiconv_participants} new participants")
         logger.info(f"Current successfully converted BIDS participants: {len(participant_bids_paths)}")
