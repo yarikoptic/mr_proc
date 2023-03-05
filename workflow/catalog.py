@@ -59,8 +59,37 @@ def list_bids(bids_dir, session_id, logger):
 
     return current_bids_session_dirs
 
-def get_new_raw_dicoms(manifest_csv, raw_dicom_dir, dicom_dir, session_id, logger):
 
+def get_new_downloads(manifest_csv, raw_dicom_dir, session_id, logger):
+    """ Identify new dicoms not yet inside <DATASET_ROOT>/scratch/raw_dicom
+    """
+    manifest_df = read_manifest(manifest_csv, session_id, logger)
+    participants = set(manifest_df["participant_id"])
+    n_participants = len(participants)
+
+    # check raw dicom dir    
+    available_raw_dicom_dirs = list_dicoms(raw_dicom_dir, logger)
+    n_available_raw_dicom_dirs = len(available_raw_dicom_dirs)
+    available_raw_dicom_dirs_participant_ids = list(manifest_df[manifest_df["dicom_file"].isin(available_raw_dicom_dirs)]["participant_id"].astype(str).values)
+
+    # check mismatch between manifest and raw_dicoms
+    download_dicom_dir_participant_ids = set(participants) - set(available_raw_dicom_dirs_participant_ids)
+    n_download_dicom_dirs = len(download_dicom_dir_participant_ids)
+
+    download_df = manifest_df[manifest_df["participant_id"].isin(download_dicom_dir_participant_ids)]
+
+    logger.info("-"*50)
+    logger.info(f"Identifying participants to be downloaded\n\n \
+    - n_particitpants (listed in the mr_proc_manifest): {n_participants}\n \
+    - n_available_dicom_dirs: {n_available_raw_dicom_dirs}\n \
+    - n_missing_dicom_dirs: {n_download_dicom_dirs}\n")
+    logger.info("-"*50)
+
+    return download_df
+
+def get_new_raw_dicoms(manifest_csv, raw_dicom_dir, dicom_dir, session_id, logger):
+    """ Identify new raw_dicoms not yet reorganized inside <DATASET_ROOT>/dicom
+    """
     manifest_df = read_manifest(manifest_csv, session_id, logger)
     participants = set(manifest_df["participant_id"])
     n_participants = len(participants)
@@ -97,7 +126,7 @@ def get_new_raw_dicoms(manifest_csv, raw_dicom_dir, dicom_dir, session_id, logge
     return reorg_df
 
 def get_new_dicoms(manifest_csv, dicom_dir, bids_dir, session_id, logger):
-    """
+    """ Identify new dicoms not yet BIDSified
     """
     manifest_df = read_manifest(manifest_csv, session_id, logger)
     participants = set(manifest_df["participant_id"])
