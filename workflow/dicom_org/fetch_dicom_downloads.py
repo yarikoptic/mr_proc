@@ -94,7 +94,6 @@ def untar_dcm(src_tar,dst_dir):
 def run(global_configs, session_id, n_jobs):
     """ Runs the dicom fetch 
     """
-    
     session = f"ses-{session_id}"
 
     # populate relative paths
@@ -117,6 +116,7 @@ def run(global_configs, session_id, n_jobs):
     logger.info(f"Number of parallel jobs: {n_jobs}")
 
     download_df = catalog.get_new_downloads(mr_proc_manifest, raw_dicom_dir, session_id, logger)
+    print(f"download df: \n {download_df}")
     download_participants = list(download_df["participant_id"].values)
     n_download_participants = len(download_participants)
     logger.info(f"Found {n_download_participants} new participants for download")
@@ -130,9 +130,11 @@ def run(global_configs, session_id, n_jobs):
             for dcm in dcm_download_df["dicom_file"].values:
                 dcm_dst_name = f"{raw_dicom_dir}/{os.path.basename(dcm)}"
                 shutil.copyfile(dcm, dcm_dst_name)
+
                 # Check if it's a tar file and untar it
                 if "tar" in str(dcm_dst_name).rsplit("."):
-                    untar_dcm(dcm_dst_name)
+                    logger.info("Untarring copied dicom")
+                    untar_dcm(dcm_dst_name,raw_dicom_dir)
 
             # Multiple dicoms per participant can be found (i.e visits, failed runs etc)
             # Need to pick one per participant and per session
