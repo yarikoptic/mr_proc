@@ -81,8 +81,8 @@ def get_new_downloads(manifest_csv, raw_dicom_dir, session_id, logger):
     logger.info("-"*50)
     logger.info(f"Identifying participants to be downloaded\n\n \
     - n_particitpants (listed in the mr_proc_manifest): {n_participants}\n \
-    - n_available_dicom_dirs: {n_available_raw_dicom_dirs}\n \
-    - n_missing_dicom_dirs: {n_download_dicom_dirs}\n")
+    - n_available_raw_dicom_dirs: {n_available_raw_dicom_dirs}\n \
+    - n_download_dicom_dirs: {n_download_dicom_dirs}\n")
     logger.info("-"*50)
 
     return download_df

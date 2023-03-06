@@ -8,7 +8,7 @@ import argparse
 import json
 import logging
 import subprocess
-from workflow.dicom_org.utils import search_dicoms, copy_dicoms
+import tarfile
 from joblib import Parallel, delayed
 import workflow.catalog as catalog
 
@@ -47,9 +47,6 @@ def find_mri(participant_ids):
     proc_out = proc.stdout.strip().split('\n')
 
     dcm_download_df = pd.DataFrame(columns=["dicom_file","session_id"])
-    print("-"*50)
-    print(proc_out)
-    print("-"*50)
     i = 0 
     for l in proc_out:
         result = l.find('found')
@@ -82,6 +79,17 @@ def filter_duplicate_dicoms(dicom_dir_matches,logger):
     
     return max_n_dicom_dir
 
+def untar_dcm(src_tar,dst_dir):
+    """
+    """
+    file = tarfile.open(src_tar)
+    participant_dir = str(src_tar).rsplit(".",2)[0]
+    file.extractall(f"{dst_dir}/{participant_dir}") 
+    file.close()
+
+    # Cleanup
+    shutil.move(src_tar, f"tar/{src_tar}")
+
 
 def run(global_configs, session_id, n_jobs):
     """ Runs the dicom fetch 
@@ -94,6 +102,11 @@ def run(global_configs, session_id, n_jobs):
     raw_dicom_dir = f"{DATASET_ROOT}/scratch/raw_dicom/{session}/"
     log_dir = f"{DATASET_ROOT}/scratch/logs/"
     log_file = f"{log_dir}/dicom_fetch.log"
+
+    # mkdirs
+    Path(raw_dicom_dir).mkdir(parents=True, exist_ok=True)
+    Path(f"{raw_dicom_dir}/tars").mkdir(parents=True, exist_ok=True)
+    Path(f"{log_dir}").mkdir(parents=True, exist_ok=True)
 
     mr_proc_manifest = f"{DATASET_ROOT}/tabular/demographics/mr_proc_manifest.csv"
     
@@ -109,19 +122,20 @@ def run(global_configs, session_id, n_jobs):
     logger.info(f"Found {n_download_participants} new participants for download")
 
     if n_download_participants > 0:
-        #####################################################
-        print("DOING A TEST RUN")
-        print(download_participants)
         dcm_download_df = find_mri(download_participants[:2])
-        n_download_success = len(dcm_download_df)
-        print(f"n_downloadble_mri_found: {n_download_success}")
-        if n_download_success > 0:
-            logger.info(f"Copying {n_download_success} dicoms in to {raw_dicom_dir}")
+        n_dcm_download = len(dcm_download_df)
+        print(f"n_downloadble_mri_found: {n_dcm_download}")
+        if n_dcm_download > 0:
+            logger.info(f"Copying {n_dcm_download} dicoms in to {raw_dicom_dir}")            
             for dcm in dcm_download_df["dicom_file"].values:
-                dcm_basename = os.path.basename(dcm)
-                print(f"dcm_basename: {dcm_basename}")
-                shutil.copyfile(f"{dcm}", f"{raw_dicom_dir}/{dcm_basename}")
+                dcm_dst_name = f"{raw_dicom_dir}/{os.path.basename(dcm)}"
+                shutil.copyfile(dcm, dcm_dst_name)
+                # Check if it's a tar file and untar it
+                if "tar" in str(dcm_dst_name).rsplit("."):
+                    untar_dcm(dcm_dst_name)
 
+            # Multiple dicoms per participant can be found (i.e visits, failed runs etc)
+            # Need to pick one per participant and per session
             new_participant_dicom_downloads = []
             for participant_id in download_participants:                        
                 # Check for files
@@ -135,8 +149,8 @@ def run(global_configs, session_id, n_jobs):
                         logger.info(f"Found multiple ({len(dicom_dir_matches)}) dicom dirs for {participant_id}")
                         link_dicom_dir = filter_duplicate_dicoms(dicom_dir_matches,logger)
                     else:
-                        link_dicom_dir = dicom_dir_matches[0]
-            
+                        link_dicom_dir = dicom_dir_matches[0]                            
+
                     new_participant_dicom_downloads.append(os.path.basename(link_dicom_dir))
 
             n_new_participant_dicom_downloads = len(new_participant_dicom_downloads)
@@ -145,12 +159,6 @@ def run(global_configs, session_id, n_jobs):
             if n_new_participant_dicom_downloads > 0:
                 # Add newly processed bids_id to the manifest csv
                 manifest_df = pd.read_csv(mr_proc_manifest)
-                
-                print(manifest_df.loc[(manifest_df["participant_id"].astype(str).isin(download_participants))
-                                 & (manifest_df["session_id"].astype(str) == str(session_id))])
- 
-                print(new_participant_dicom_downloads)
-
 
                 logger.info("Updating mr_proc_manifest with dicom file names")
                 manifest_df.loc[(manifest_df["participant_id"].astype(str).isin(download_participants))
@@ -161,8 +169,7 @@ def run(global_configs, session_id, n_jobs):
                 logger.info(f"Downloaded DICOMs (n={n_new_participant_dicom_downloads}) are now copied into {raw_dicom_dir} and ready for dicom_reorg!")
         else:
             logger.error("No DICOMs were found using find_mri script")
-        
-            
+          
     else:
         logger.info(f"No new participants found for dicom fetch...")
     
