@@ -67,8 +67,14 @@ def get_new_downloads(manifest_csv, raw_dicom_dir, session_id, logger):
     participants = set(manifest_df["participant_id"])
     n_participants = len(participants)
 
+    logger.info("-"*50)
+    print("DEBUG DOWNLOAD")
+    print(f"participants: {participants}")
     # check raw dicom dir    
     available_raw_dicom_dirs = list_dicoms(raw_dicom_dir, logger)
+    print(f"available_raw_dicom_dirs: {available_raw_dicom_dirs}")
+    logger.info("-"*50)
+    
     n_available_raw_dicom_dirs = len(available_raw_dicom_dirs)
     available_raw_dicom_dirs_participant_ids = list(manifest_df[manifest_df["dicom_file"].isin(available_raw_dicom_dirs)]["participant_id"].astype(str).values)
 

@@ -83,12 +83,11 @@ def untar_dcm(src_tar,dst_dir):
     """
     """
     file = tarfile.open(src_tar)
-    participant_dir = str(src_tar).rsplit(".",2)[0]
-    file.extractall(f"{dst_dir}/{participant_dir}") 
+    file.extractall(f"{dst_dir}/.") 
     file.close()
 
     # Cleanup
-    shutil.move(src_tar, f"tar/{src_tar}")
+    shutil.move(src_tar, f"{dst_dir}/tars/")
 
 
 def run(global_configs, session_id, n_jobs):
