@@ -83,7 +83,8 @@ def untar_dcm(src_tar,dst_dir):
     """
     """
     file = tarfile.open(src_tar)
-    file.extractall(f"{dst_dir}/.") 
+    participant_dir = os.path.basename(src_tar).rsplit(".",2)[0]
+    file.extractall(f"{dst_dir}/{participant_dir}/") 
     file.close()
 
     # Cleanup
