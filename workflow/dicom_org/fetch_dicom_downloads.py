@@ -39,9 +39,9 @@ def get_logger(log_file, mode="w", level="DEBUG"):
     
     return logger
 
-
 def find_mri(participant_ids):
-    print(participant_ids)
+    """
+    """
     CMD = ["find_mri", "-claim", "-noconfir"] + participant_ids
     proc = subprocess.run(CMD,capture_output=True,text=True)
     proc_out = proc.stdout.strip().split('\n')
@@ -79,7 +79,7 @@ def filter_duplicate_dicoms(dicom_dir_matches,logger):
     
     return max_n_dicom_dir
 
-def untar_dcm(src_tar,dst_dir):
+def untar_dcm(src_tar,dst_dir,tar_bkup_dir):
     """
     """
     file = tarfile.open(src_tar)
@@ -88,7 +88,7 @@ def untar_dcm(src_tar,dst_dir):
     file.close()
 
     # Cleanup
-    shutil.move(src_tar, f"{dst_dir}/tars/")
+    shutil.move(src_tar, tar_bkup_dir)
 
 
 def run(global_configs, session_id, n_jobs):
@@ -99,6 +99,7 @@ def run(global_configs, session_id, n_jobs):
     # populate relative paths
     DATASET_ROOT = global_configs["DATASET_ROOT"]
     raw_dicom_dir = f"{DATASET_ROOT}/scratch/raw_dicom/{session}/"
+    tar_bkup_dir = f"{DATASET_ROOT}/scratch/raw_dicom/tars/"
     log_dir = f"{DATASET_ROOT}/scratch/logs/"
     log_file = f"{log_dir}/dicom_fetch.log"
 
@@ -134,7 +135,7 @@ def run(global_configs, session_id, n_jobs):
                 # Check if it's a tar file and untar it
                 if "tar" in str(dcm_dst_name).rsplit("."):
                     logger.info("Untarring copied dicom")
-                    untar_dcm(dcm_dst_name,raw_dicom_dir)
+                    untar_dcm(dcm_dst_name,raw_dicom_dir,tar_bkup_dir)
 
             # Multiple dicoms per participant can be found (i.e visits, failed runs etc)
             # Need to pick one per participant and per session
