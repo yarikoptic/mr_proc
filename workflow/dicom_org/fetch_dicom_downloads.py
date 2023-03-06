@@ -98,7 +98,6 @@ def run(global_configs, session_id, n_jobs):
     logger = get_logger(log_file)
     logger.info("-"*50)
     logger.info(f"Using DATASET_ROOT: {DATASET_ROOT}")
-    logger.info(f"symlinks: {use_symlinks}")
     logger.info(f"session: {session}")
     logger.info(f"Number of parallel jobs: {n_jobs}")
 
@@ -164,7 +163,6 @@ if __name__ == '__main__':
         global_configs = json.load(f)
 
     session_id = args.session_id
-    use_symlinks = args.use_symlinks # Saves space and time! 
     n_jobs = args.n_jobs
 
     run(global_configs, session_id, n_jobs)
