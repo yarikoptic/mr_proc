@@ -16,7 +16,6 @@ import workflow.catalog as catalog
 
 fname = __file__
 CWD = os.path.dirname(os.path.abspath(fname))
-FETCH_SCRIPT = f"{CWD}/scripts/fetch_new_scans.sh"
 
 def get_logger(log_file, mode="w", level="DEBUG"):
     """ Initiate a new logger if not provided
@@ -38,6 +37,49 @@ def get_logger(log_file, mode="w", level="DEBUG"):
     logger.addHandler(stream)
     
     return logger
+
+
+def find_mri(participant_ids):
+    CMD = ["find_mri", "-claim", "-noconfir"] + participant_ids
+    proc = subprocess.run(CMD,capture_output=True,text=True)
+    proc_out = proc.stdout.strip().split('\n')
+
+    dcm_download_df = pd.DataFrame(columns=["dicom_file","session_id"])
+    print("-"*50)
+    print(proc_out)
+    print("-"*50)
+    i = 0 
+    for l in proc_out:
+        result = l.find('found')
+        if result != -1:
+            dcm_file = l.strip().rsplit(" ",1)[1]
+            minc_file = dcm_file.lower().find("minc")
+            if minc_file == -1:
+                mri_index = dcm_file.lower().find("mri")
+                if mri_index != -1:
+                    visit_id = int(dcm_file[mri_index:].split("_",1)[0][3:])
+                else:
+                    visit_id = "unknown"
+
+                dcm_download_df.loc[i] = [dcm_file, visit_id]
+                i = i + 1
+
+    return dcm_download_df
+
+def filter_duplicate_dicoms(dicom_dir_matches,logger):
+    """
+    """
+    n_dcm_list = []
+    for dicom_dir in dicom_dir_matches:
+        n_dcm = len(os.listdir(dicom_dir))
+        n_dcm_list.append(n_dcm)
+
+    n_max_dcm = np.max(n_dcm_list)
+    logger.info(f"Selecting dicom dir with {n_max_dcm} dcm files")
+    max_n_dicom_dir = dicom_dir_matches[np.argmax(n_dcm_list)]
+    
+    return max_n_dicom_dir
+
 
 def run(global_configs, session_id, n_jobs):
     """ Runs the dicom fetch 
@@ -63,13 +105,44 @@ def run(global_configs, session_id, n_jobs):
     download_df = catalog.get_new_downloads(mr_proc_manifest, raw_dicom_dir, session_id, logger)
     download_participants = download_df["participant_id"].values
     n_download_participants = len(download_participants)
+    logger.info(f"Found {n_download_participants} new participants for download")
+
     if n_download_participants > 0:
-        for participant_id in download_participants:            
-            ARGS = [raw_dicom_dir, participant_id, log_file]
-            CMD = [FETCH_SCRIPT] + ARGS
-            fetch_proc = subprocess.run(CMD)
+        #####################################################
+        dcm_download_df = [] #find_mri(download_participants)
+        n_download_success = len(dcm_download_df)
+
+        if n_download_success > 0:
+            new_dicom_downloads = []
+            for participant_id in download_participants:                        
+                # Check for files
+                dicom_dir_matches = glob.glob(f"{raw_dicom_dir}/{session_id}/{participant_id}*")
+
+                if len(dicom_dir_matches)== 0:
+                    logger.warning(f"No dicom dir match found for {participant_id}")
+                    new_dicom_downloads.append(None)
+                else:
+                    if len(dicom_dir_matches) > 1:
+                        logger.info(f"Found multiple ({len(dicom_dir_matches)}) dicom dirs for {participant_id}")
+                        link_dicom_dir = filter_duplicate_dicoms(dicom_dir_matches,logger)
+                    else:
+                        link_dicom_dir = dicom_dir_matches[0]
+            
+                new_dicom_downloads.append(os.path.basename(link_dicom_dir))
+
+            n_new_dicom_downloads = len(new_dicom_downloads)
+
+            # Add newly processed bids_id to the manifest csv
+            manifest_df = pd.read_csv(mr_proc_manifest)
+            manifest_df.loc[(manifest_df["participant_id"].astype(str).isin(download_participants))
+                            & (manifest_df["session_id"].astype(str) == str(session_id)), 
+                            "dicom_file"] = new_dicom_downloads["dicom_file"]
+
+            logger.info(f"Downloaded DICOMs (n={n_new_dicom_downloads}) are now copied into {raw_dicom_dir} and ready for dicom_reorg!")
+        else:
+            logger.error("No DICOMs were found using find_mri script")
         
-        logger.info(f"Downloaded DICOMs are now copied into {raw_dicom_dir} and ready for dicom_reorg!")
+            
     else:
         logger.info(f"No new participants found for dicom fetch...")
     
